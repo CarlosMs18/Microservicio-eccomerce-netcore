@@ -63,8 +63,9 @@ if (app.Environment.IsDevelopment())
 }
 app.UseHttpsRedirection();
 app.UseRouting();
+app.UseMiddleware<TokenValidationMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
-app.UseMiddleware<TokenValidationMiddleware>(); 
+ 
 app.UseMiddleware<ExceptionMiddleware>();
 app.Run();

@@ -2,6 +2,7 @@
 using Catalog.Application.Features.Catalogs.Commands;
 using Catalog.Application.Features.Categories.Queries;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 
@@ -19,8 +20,10 @@ namespace Catalog.WebAPI.Controllers
         }
 
         [HttpPost("[action]")]
+        [Authorize]
         [ProducesResponseType((int)HttpStatusCode.OK)]
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<ActionResult> CreateCategory([FromBody] CreateCategoryCommand command)
         {
             return Ok(await _mediator.Send(command));

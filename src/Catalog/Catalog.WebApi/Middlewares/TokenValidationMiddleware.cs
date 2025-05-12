@@ -8,6 +8,15 @@ public class TokenValidationMiddleware
 {
     private readonly RequestDelegate _next;
 
+    // Diccionario de rutas públicas con sus métodos permitidos
+    private static readonly Dictionary<string, HashSet<string>> _publicRoutes = new()
+    {
+        ["/api/category"] = new HashSet<string> { "GET" },
+        // Ejemplo de cómo agregar más rutas:
+        // ["/api/product"] = new HashSet<string> { "GET", "OPTIONS" },
+        // ["/api/public/data"] = new HashSet<string> { "GET" }
+    };
+
     public TokenValidationMiddleware(RequestDelegate next)
     {
         _next = next;
@@ -18,21 +27,14 @@ public class TokenValidationMiddleware
         var path = context.Request.Path.Value?.ToLowerInvariant();
         var method = context.Request.Method;
 
-        // 1. Permitir sin token: GET a /api/category
-        if (method == "GET" && path.StartsWith("/api/category"))
+        // 1. Verificar si es una ruta pública
+        if (IsPublicRoute(method, path))
         {
             await _next(context);
             return;
         }
 
-        // 2. Permitir sin token: OPTIONS (necesario para CORS)
-        if (method == "OPTIONS")
-        {
-            await _next(context);
-            return;
-        }
-
-        // 3. Validar token para rutas protegidas
+        // 2. Validar token para rutas protegidas
         var authHeader = context.Request.Headers["Authorization"].ToString();
 
         if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
@@ -44,7 +46,6 @@ public class TokenValidationMiddleware
 
         var token = authHeader.Substring("Bearer ".Length).Trim();
         var tokenResult = await authService.ValidateTokenAsync(token);
-        Console.WriteLine("TOKEN RESULT", tokenResult);
 
         if (tokenResult == null || !tokenResult.IsValid)
         {
@@ -53,23 +54,48 @@ public class TokenValidationMiddleware
             return;
         }
 
-        // 4. Construir identidad del usuario autenticado
+        // 3. Construir identidad del usuario
+        var identity = CreateIdentity(tokenResult);
+        context.User = new ClaimsPrincipal(identity);
+
+        await _next(context);
+    }
+
+    private bool IsPublicRoute(string method, string path)
+    {
+        // Todas las peticiones OPTIONS son públicas (necesario para CORS)
+        if (method == "OPTIONS")
+            return true;
+
+        if (string.IsNullOrEmpty(path))
+            return false;
+
+        // Buscar coincidencia exacta o prefijo de ruta
+        foreach (var route in _publicRoutes)
+        {
+            if (path.StartsWith(route.Key))
+            {
+                // Verificar si el método está permitido
+                return route.Value.Contains(method);
+            }
+        }
+
+        return false;
+    }
+
+    private static ClaimsIdentity CreateIdentity(TokenValidationDecoded tokenResult)
+    {
         var claims = new List<Claim>
         {
             new Claim("uid", tokenResult.UserId),
             new Claim(ClaimTypes.Email, tokenResult.Email)
         };
 
-        // Agregar roles si existen
         foreach (var role in tokenResult.Roles)
         {
             claims.Add(new Claim(ClaimTypes.Role, role));
         }
 
-        var identity = new ClaimsIdentity(claims, "Bearer");
-        context.User = new ClaimsPrincipal(identity);
-
-        // 5. Continuar con el pipeline
-        await _next(context);
+        return new ClaimsIdentity(claims, "Bearer");
     }
 }
