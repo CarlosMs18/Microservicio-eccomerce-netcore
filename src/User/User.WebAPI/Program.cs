@@ -1,15 +1,20 @@
 ﻿using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using User.Application.Models;
 using User.Infrastructure;
 using User.Infrastructure.Persistence;
+using User.Infrastructure.Services.External.Grpc;
 using User.WebAPI.Middlewares;
 using Users.Application;
 
 var builder = WebApplication.CreateBuilder(args);
-
+var grpcPort = builder.Configuration.GetValue<int>("Grpc:Port");
+var restPort = builder.Configuration.GetValue<int>("RestPort");
+Console.WriteLine(grpcPort);
+Console.WriteLine(restPort);
 // 1. Configuración básica del servicio
 builder.Services.AddControllers();
 
@@ -35,6 +40,29 @@ if (builder.Environment.IsDevelopment())
         });
     });
 }
+
+// Opción A: Solo localhost (más seguro en desarrollo)
+//builder.WebHost.ConfigureKestrel(options =>
+//{
+//    options.ListenLocalhost(5003, o => o.Protocols = HttpProtocols.Http2); // gRPC
+//});
+
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    // gRPC (HTTP/2 exclusivo)
+    options.ListenAnyIP(grpcPort, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http2;
+    });
+
+    // REST (HTTP/1.1 exclusivo)
+    options.ListenAnyIP(restPort, listenOptions => 
+    {
+        listenOptions.Protocols = HttpProtocols.Http1;
+        listenOptions.UseHttps();
+    });
+});
 
 var app = builder.Build();
 
@@ -96,5 +124,7 @@ app.MapHealthChecks("/health", new HealthCheckOptions
         await context.Response.WriteAsJsonAsync(result);
     }
 });
+
+app.MapGrpcService<AuthGrpcService>();
 
 app.Run();

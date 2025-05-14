@@ -2,11 +2,15 @@ using Catalog.Application;
 using Catalog.Infrastructure;
 using Catalog.Infrastructure.Persistence;
 using Catalog.Infrastructure.Resilience;
-using Catalog.Infrastructure.SyncDataServices;
+using Catalog.Infrastructure.SyncDataServices.Grpc;
+using Catalog.Infrastructure.SyncDataServices.Http;
 using Catalog.WebAPI.Middlewares;
+using Grpc.Core;
 using Microsoft.EntityFrameworkCore;
+using Polly;
 using Shared.Core.Interfaces;
 using System.Net.Http.Headers;
+using User.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +26,24 @@ builder.Services.AddHttpClient<IExternalAuthService, UserHttpService>(client =>
 })
 .AddPolicyHandler(HttpClientPolicies.GetRetryPolicy(builder.Configuration))
 .AddPolicyHandler(HttpClientPolicies.GetCircuitBreakerPolicy(builder.Configuration));
+
+builder.Services.AddGrpcClient<AuthService.AuthServiceClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["Grpc:UserUrl"]);
+})
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
+    KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+    KeepAlivePingTimeout = TimeSpan.FromSeconds(30)
+})
+.AddPolicyHandler(Policy<HttpResponseMessage>
+    .Handle<RpcException>(e => e.StatusCode == StatusCode.Unavailable)
+    .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)))
+);
+
+
+builder.Services.AddSingleton<UserGrpcClient>();
 
 
 builder.Services.AddControllers();
@@ -63,9 +85,21 @@ if (app.Environment.IsDevelopment())
 }
 app.UseHttpsRedirection();
 app.UseRouting();
-app.UseMiddleware<TokenValidationMiddleware>();
+/*app.UseMiddleware<TokenValidationMiddleware>();*/ /*comunicacion HTTP*/
+
+app.UseMiddleware<TokenGrpcValidationMiddleware>(); /*comunicacion GRPC*/
 app.UseAuthorization();
 app.MapControllers();
- 
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/proto/auth.proto", async context =>
+    {
+        await context.Response.WriteAsync(
+            await File.ReadAllTextAsync("../User/User.Infrastructure/Protos/auth.proto"));
+    });
+}
+
 app.UseMiddleware<ExceptionMiddleware>();
+
 app.Run();

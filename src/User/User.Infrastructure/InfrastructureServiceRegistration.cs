@@ -9,7 +9,8 @@ using User.Application.Contracts.Services;
 using User.Application.Models;
 using User.Infrastructure.Persistence;
 using User.Infrastructure.Repositories;
-using User.Infrastructure.Services;
+using User.Infrastructure.Services.External.Grpc;
+using User.Infrastructure.Services.Internal;
 
 namespace User.Infrastructure
 {
@@ -52,12 +53,15 @@ namespace User.Infrastructure
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddTransient<IUserRepository, UserRepository>();
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IHealthChecker, HealthChecker>();
             services.AddScoped<IExternalAuthService,  ExternalAuthService>();   
             services.AddScoped(typeof(IAsyncRepository<>), typeof(RepositoryBase<>));
 
             // 5. AutoMapper
             services.AddAutoMapper(Assembly.GetExecutingAssembly());
 
+            services
+                .AddGrpcServices(configuration);
             return services;
         }
     }

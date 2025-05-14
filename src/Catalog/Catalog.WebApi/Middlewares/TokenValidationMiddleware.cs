@@ -45,6 +45,7 @@ public class TokenValidationMiddleware
         }
 
         var token = authHeader.Substring("Bearer ".Length).Trim();
+        Console.WriteLine($"TOKEN: {token}");
         var tokenResult = await authService.ValidateTokenAsync(token);
 
         if (tokenResult == null || !tokenResult.IsValid)

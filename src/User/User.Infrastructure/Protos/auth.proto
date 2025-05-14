@@ -1,0 +1,36 @@
+﻿syntax = "proto3";
+
+package user.auth;
+
+
+message TokenRequest {
+    string token = 1;
+}
+
+
+message TokenValidationResponse {
+    bool is_valid = 1;
+    string user_id = 2;  
+    string email = 3;
+    repeated string roles = 4;
+    map<string, string> claims = 5;
+}
+
+
+service AuthService {
+    rpc ValidateToken (TokenRequest) returns (TokenValidationResponse);
+    rpc CheckHealth (HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message HealthCheckRequest {
+    string service = 1;
+}
+
+message HealthCheckResponse {
+    enum ServingStatus {
+        UNKNOWN = 0;
+        SERVING = 1;
+        NOT_SERVING = 2;
+    }
+    ServingStatus status = 1;
+}

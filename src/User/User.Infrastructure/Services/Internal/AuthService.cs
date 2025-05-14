@@ -8,15 +8,15 @@ using User.Application.Constants;
 using User.Application.Contracts.Services;
 using User.Application.Models;
 
-namespace User.Infrastructure.Services
+namespace User.Infrastructure.Services.Internal
 {
     public class AuthService : IAuthService
     {
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly JwtSettings _jwtSettings;
-        private readonly UserManager<ApplicationUser> _userManager; 
+        private readonly UserManager<ApplicationUser> _userManager;
 
-        public AuthService(SignInManager<ApplicationUser> signInManager , IOptions<JwtSettings> jwtSettings, UserManager<ApplicationUser> userManager)
+        public AuthService(SignInManager<ApplicationUser> signInManager, IOptions<JwtSettings> jwtSettings, UserManager<ApplicationUser> userManager)
         {
             _signInManager = signInManager;
             _userManager = userManager;
@@ -61,6 +61,6 @@ namespace User.Infrastructure.Services
             );
         }
 
-       
+
     }
 }

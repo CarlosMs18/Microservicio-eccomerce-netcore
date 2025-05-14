@@ -3,7 +3,8 @@ using System.Net.Http.Json;
 using Shared.Core.Dtos;
 using Shared.Core.Interfaces;
 
-namespace Catalog.Infrastructure.SyncDataServices
+
+namespace Catalog.Infrastructure.SyncDataServices.Http
 {
     public class UserHttpService : IExternalAuthService
     {
@@ -20,6 +21,7 @@ namespace Catalog.Infrastructure.SyncDataServices
             try
             {
                 Console.WriteLine("llamando ValidateTokenAsync DE CATALOG ");
+                Console.Write(token);   
                 var request = new HttpRequestMessage(HttpMethod.Get, "validate-token");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
