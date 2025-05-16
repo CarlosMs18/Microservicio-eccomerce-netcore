@@ -21,12 +21,13 @@ namespace Catalog.WebAPI.Controllers
 
         [HttpPost("[action]")]
         [Authorize]
-        [ProducesResponseType((int)HttpStatusCode.OK)]
+        [ProducesResponseType((int)HttpStatusCode.Created)]
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<ActionResult> CreateCategory([FromBody] CreateCategoryCommand command)
         {
-            return Ok(await _mediator.Send(command));
+            var result = await _mediator.Send(command);
+            return Created("", result);
         }
 
         [HttpGet]

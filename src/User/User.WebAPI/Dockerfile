@@ -12,6 +12,7 @@ FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /src
 COPY ["src/User/User.WebAPI/User.WebAPI.csproj", "src/User/User.WebAPI/"]
 COPY ["src/User/User.Infrastructure/User.Infrastructure.csproj", "src/User/User.Infrastructure/"]
+COPY ["Shared/Shared.Core/Shared.Core.csproj", "Shared/Shared.Core/"]
 COPY ["src/User/Users.Application/User.Application.csproj", "src/User/Users.Application/"]
 RUN dotnet restore "src/User/User.WebAPI/User.WebAPI.csproj"
 COPY . .

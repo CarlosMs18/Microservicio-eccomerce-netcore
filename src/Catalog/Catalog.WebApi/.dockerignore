@@ -1,0 +1,14 @@
+﻿# Ignora carpetas de build
+**/bin/
+**/obj/
+**/.vs/
+**/.git/
+
+# Ignora archivos innecesarios
+*.md
+*.log
+*.dockerignore
+*.gitignore
+
+# Ignora archivos de desarrollo (opcional)
+appsettings.Development.json
