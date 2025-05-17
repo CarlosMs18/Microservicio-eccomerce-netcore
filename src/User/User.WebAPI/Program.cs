@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using System.Security.Cryptography.X509Certificates;
 using User.Application.Models;
 using User.Infrastructure;
 using User.Infrastructure.Persistence;
@@ -58,11 +59,7 @@ builder.WebHost.ConfigureKestrel(options =>
             // En producción: Certificado real montado en /app/certs/
             listenOptions.UseHttps("/app/certs/tls.crt", "/app/certs/tls.key");
         }
-        else
-        {
-            // En desarrollo: Certificado autofirmado
-            listenOptions.UseHttps();
-        }
+        
     });
 });
 

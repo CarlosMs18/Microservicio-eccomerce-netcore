@@ -48,8 +48,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scripts", "Scripts", "{D520
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "User", "User", "{AFE68267-A930-4E76-87EE-E1FEE9375D37}"
 	ProjectSection(SolutionItems) = preProject
-		k8s\User\deployment.yaml = k8s\User\deployment.yaml
-		k8s\User\service.yaml = k8s\User\service.yaml
+		k8s\User\deployment-dev.yaml = k8s\User\deployment-dev.yaml
+		k8s\User\service-dev.yaml = k8s\User\service-dev.yaml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Catalog", "Catalog", "{5AD0C693-3A01-47EA-8190-7D817AE5A64F}"
