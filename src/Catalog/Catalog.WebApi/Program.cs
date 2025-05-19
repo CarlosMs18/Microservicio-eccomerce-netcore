@@ -6,6 +6,7 @@ using Catalog.Infrastructure.SyncDataServices.Grpc;
 using Catalog.Infrastructure.SyncDataServices.Http;
 using Catalog.WebAPI.Middlewares;
 using Grpc.Core;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Polly;
 using Shared.Core.Interfaces;
@@ -13,6 +14,7 @@ using System.Net.Http.Headers;
 using User.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
+var restPort = builder.Configuration.GetValue<int>("RestPort");
 
 builder.Services.AddHttpClient<IExternalAuthService, UserHttpService>(client =>
 {
@@ -56,6 +58,19 @@ if (builder.Environment.IsDevelopment())
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
 }
+
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    // Endpoint para REST (HTTP/1.1)
+    options.ListenAnyIP(restPort, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http1;
+    });
+
+    // Opcional: Endpoint para gRPC (HTTP/2) - Solo si Catalog sirve gRPC
+    // options.ListenAnyIP(grpcPort, listenOptions => listenOptions.Protocols = HttpProtocols.Http2);
+});
 
 var app = builder.Build();
 

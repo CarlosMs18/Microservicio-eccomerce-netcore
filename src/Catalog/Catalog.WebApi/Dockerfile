@@ -1,20 +1,13 @@
-#See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
-
-#Depending on the operating system of the host machines(s) that will build or run the containers, the image specified in the FROM statement may need to be changed.
-#For more information, please see https://aka.ms/containercompat
-
 FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS base
 WORKDIR /app
 EXPOSE 80
-EXPOSE 443
+EXPOSE 5003 
+ENV ASPNETCORE_ENVIRONMENT=Docker
+ENV DOTNET_RUNNING_IN_CONTAINER=true
 
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /src
 COPY ["src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj", "src/Catalog/Catalog.WebApi/"]
-COPY ["src/Catalog/Catalog.Application/Catalog.Application.csproj", "src/Catalog/Catalog.Application/"]
-COPY ["Shared/Shared.Core/Shared.Core.csproj", "Shared/Shared.Core/"]
-COPY ["src/Catalog/Catalog.Domain/Catalog.Domain.csproj", "src/Catalog/Catalog.Domain/"]
-COPY ["src/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj", "src/Catalog/Catalog.Infrastructure/"]
 RUN dotnet restore "src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj"
 COPY . .
 WORKDIR "/src/src/Catalog/Catalog.WebApi"

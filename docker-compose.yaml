@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  user-service:
+    build:
+      context: .
+      dockerfile: src/User/User.WebAPI/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker 
+    ports:
+      - "5001:80"   
+      - "5002:5001"  
+    volumes:
+      - ./src/User/User.WebAPI/appsettings.Docker.json:/app/appsettings.Docker.json
+    restart: unless-stopped
+
+  catalog-service:
+    build:
+      context: .
+      dockerfile: src/Catalog/Catalog.WebAPI/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker  
+    ports:
+      - "7205:80"    
+    volumes:
+      - ./src/Catalog/Catalog.WebAPI/appsettings.Docker.json:/app/appsettings.Docker.json
+    depends_on:
+      - user-service
+    restart: unless-stopped

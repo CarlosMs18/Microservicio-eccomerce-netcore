@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
-using System.Security.Cryptography.X509Certificates;
 using User.Application.Models;
 using User.Infrastructure;
 using User.Infrastructure.Persistence;
@@ -15,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 var grpcPort = builder.Configuration.GetValue<int>("Grpc:Port");
 var restPort = builder.Configuration.GetValue<int>("RestPort");
 var isProduction = builder.Environment.IsProduction();
+var isKubernetes = builder.Configuration.GetValue<bool>("IsKubernetes", false); // Nueva variable
 
 // 1. Configuración básica del servicio
 builder.Services.AddControllers();
@@ -54,7 +54,7 @@ builder.WebHost.ConfigureKestrel(options =>
     {
         listenOptions.Protocols = HttpProtocols.Http1;
 
-        if (isProduction)
+        if (isProduction && !isKubernetes)
         {
             // En producción: Certificado real montado en /app/certs/
             listenOptions.UseHttps("/app/certs/tls.crt", "/app/certs/tls.key");
@@ -66,9 +66,18 @@ builder.WebHost.ConfigureKestrel(options =>
 var app = builder.Build();
 
 // 5. Inicialización de la BD (solo desarrollo)
-if (!isProduction)
+if (!isProduction || isKubernetes) // Ejecuta migraciones en K8s también
 {
-    await InitializeDatabase(app);
+    try
+    {
+        await InitializeDatabase(app);
+        
+    }
+    catch (Exception ex)
+    {
+    
+        if (isProduction) throw; // En producción, falla rápido
+    }
 }
 
 // 6. Pipeline HTTP
