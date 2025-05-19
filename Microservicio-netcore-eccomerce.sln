@@ -27,8 +27,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "User.WebAPI", "src\User\Use
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "User.Application", "src\User\Users.Application\User.Application.csproj", "{8591F5A0-EFFE-4EE1-914E-0FC0B935C951}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "k8s", "k8s", "{73BDD1AB-CBB8-4473-85E2-AF7C246A670A}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{4D17FF9A-0108-4439-8ABA-B28810F8644F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Catalog", "Catalog", "{0826F69A-6985-404D-8D78-6B9AA1CBAD58}"
@@ -46,21 +44,60 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scripts", "Scripts", "{D520
 		tests\Catalog\Catalog.LoadTests\Scripts\api-test.js = tests\Catalog\Catalog.LoadTests\Scripts\api-test.js
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "User", "User", "{AFE68267-A930-4E76-87EE-E1FEE9375D37}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\User\deployment-dev.yaml = k8s\User\deployment-dev.yaml
-		k8s\User\service-dev.yaml = k8s\User\service-dev.yaml
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Catalog", "Catalog", "{5AD0C693-3A01-47EA-8190-7D817AE5A64F}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\Catalog\deployment.yaml = k8s\Catalog\deployment.yaml
-		k8s\Catalog\service.yaml = k8s\Catalog\service.yaml
-	EndProjectSection
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Elementos de la solución", "Elementos de la solución", "{24AE1D25-205C-45B2-A063-644A06719C5F}"
 	ProjectSection(SolutionItems) = preProject
 		docker-compose.yaml = docker-compose.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "k8s", "k8s", "{E4C00B5E-3699-44B8-8CA1-97577B858B48}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "overlays", "overlays", "{72D57402-6776-4AA2-89A7-985EE472FBFB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{6905E7C3-E930-4848-8960-DE1778E11EA9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "development", "development", "{06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\kustomization.yaml = k8s\overlays\development\kustomization.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "production", "production", "{0072CF27-078C-477F-81BE-CF4AD59B9261}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "catalog", "catalog", "{1DD3BE76-3A06-4725-9077-F97E7E825AD0}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\catalog\deployment.yaml = k8s\overlays\development\catalog\deployment.yaml
+		k8s\overlays\development\catalog\service.yaml = k8s\overlays\development\catalog\service.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "database", "database", "{9C3D9428-1611-4DEF-8874-62081BE2EFA1}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\database\deployment.yaml = k8s\overlays\development\database\deployment.yaml
+		k8s\overlays\development\database\kustomization.yaml = k8s\overlays\development\database\kustomization.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "user", "user", "{87ED10D7-C90C-49DE-9DDF-0D8A4B8E74C8}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\user\deployment.yaml = k8s\overlays\development\user\deployment.yaml
+		k8s\overlays\development\user\service.yaml = k8s\overlays\development\user\service.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "development", "development", "{E9AE4356-5616-4096-B47B-8B8BD37258CB}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\secrets\development\app-secrets.yaml = k8s\secrets\development\app-secrets.yaml
+		k8s\secrets\development\db-secrets.yaml = k8s\secrets\development\db-secrets.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "production", "production", "{D53257BC-4C64-497B-98DC-7CA700530DA6}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\secrets\production\app-secrets.yaml = k8s\secrets\production\app-secrets.yaml
+		k8s\secrets\production\db-secrets.yaml = k8s\secrets\production\db-secrets.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "base", "base", "{65E34109-8D8F-4C4C-8F6F-1BF50922642B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "database", "database", "{747AE917-67BD-4107-8185-15B596D03079}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\base\database\pvc.yaml = k8s\base\database\pvc.yaml
+		k8s\base\database\service.yaml = k8s\base\database\service.yaml
 	EndProjectSection
 EndProject
 Global
@@ -130,8 +167,17 @@ Global
 		{5E8B1B35-F4C5-4B11-9293-463DB67EFEA0} = {0826F69A-6985-404D-8D78-6B9AA1CBAD58}
 		{49F5352D-F008-4927-A18E-1953D0D8C6A0} = {0826F69A-6985-404D-8D78-6B9AA1CBAD58}
 		{D52066A4-0B08-4BCA-B0A0-1A8FEA04A860} = {49F5352D-F008-4927-A18E-1953D0D8C6A0}
-		{AFE68267-A930-4E76-87EE-E1FEE9375D37} = {73BDD1AB-CBB8-4473-85E2-AF7C246A670A}
-		{5AD0C693-3A01-47EA-8190-7D817AE5A64F} = {73BDD1AB-CBB8-4473-85E2-AF7C246A670A}
+		{72D57402-6776-4AA2-89A7-985EE472FBFB} = {E4C00B5E-3699-44B8-8CA1-97577B858B48}
+		{6905E7C3-E930-4848-8960-DE1778E11EA9} = {E4C00B5E-3699-44B8-8CA1-97577B858B48}
+		{06E9484A-17C7-43A0-AD6D-8DF18C02F4ED} = {72D57402-6776-4AA2-89A7-985EE472FBFB}
+		{0072CF27-078C-477F-81BE-CF4AD59B9261} = {72D57402-6776-4AA2-89A7-985EE472FBFB}
+		{1DD3BE76-3A06-4725-9077-F97E7E825AD0} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
+		{9C3D9428-1611-4DEF-8874-62081BE2EFA1} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
+		{87ED10D7-C90C-49DE-9DDF-0D8A4B8E74C8} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
+		{E9AE4356-5616-4096-B47B-8B8BD37258CB} = {6905E7C3-E930-4848-8960-DE1778E11EA9}
+		{D53257BC-4C64-497B-98DC-7CA700530DA6} = {6905E7C3-E930-4848-8960-DE1778E11EA9}
+		{65E34109-8D8F-4C4C-8F6F-1BF50922642B} = {E4C00B5E-3699-44B8-8CA1-97577B858B48}
+		{747AE917-67BD-4107-8185-15B596D03079} = {65E34109-8D8F-4C4C-8F6F-1BF50922642B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}
