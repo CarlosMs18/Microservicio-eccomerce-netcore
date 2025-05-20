@@ -20,15 +20,26 @@ namespace User.Infrastructure
             this IServiceCollection services,
             IConfiguration configuration)
         {
-            // 1. Configuración de la DB
+            // 1. Configuración de la DB con manejo dinámico de contraseña
             services.AddDbContext<UserIdentityDbContext>(options =>
-                options.UseSqlServer(configuration.GetConnectionString("IdentityConnectionString"),
-                b => b.MigrationsAssembly(typeof(UserIdentityDbContext).Assembly.FullName)));
+            {
+                var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+                var connectionString = configuration.GetConnectionString("IdentityConnectionString");
 
-            // 2. Configuración STRICTA de Identity (contraseñas, usuarios, etc.)
+                if (string.IsNullOrEmpty(dbPassword))
+                    throw new ArgumentNullException("DB_PASSWORD no está configurado");
+
+                // Reemplaza {0} por la contraseña (sanitizada para logs)
+                var formattedConnectionString = string.Format(connectionString, dbPassword);
+
+                options.UseSqlServer(formattedConnectionString,
+                    b => b.MigrationsAssembly(typeof(UserIdentityDbContext).Assembly.FullName));
+            });
+
+            // 2. Configuración STRICTA de Identity
             services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
             {
-                // 🔐 Reglas de contraseña (customiza según tus necesidades)
+                // 🔐 Reglas de contraseña (ajusta según requisitos)
                 options.Password.RequiredLength = 8;
                 options.Password.RequireNonAlphanumeric = true;
                 options.Password.RequireDigit = true;
@@ -39,29 +50,38 @@ namespace User.Infrastructure
                 options.User.RequireUniqueEmail = true;
                 options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
 
-                // ⏱️ Bloqueo por intentos fallidos (opcional)
+                // ⏱️ Bloqueo por intentos fallidos
                 options.Lockout.MaxFailedAccessAttempts = 5;
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
             })
             .AddEntityFrameworkStores<UserIdentityDbContext>()
-            .AddDefaultTokenProviders(); // Para recuperación de contraseñas
+            .AddDefaultTokenProviders();
 
-            // 3. Configuración del JWT (solo generación, NO validación)
-            services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
+            // 3. Configuración del JWT (con fallback a configuración local)
+            var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY") ?? configuration["JwtSettings:Key"];
+            services.Configure<JwtSettings>(options =>
+            {
+                options.Key = jwtKey;
+                options.Issuer = configuration["JwtSettings:Issuer"];
+                options.Audience = configuration["JwtSettings:Audience"];
+                options.DurationInMinutes = configuration.GetValue<int>("JwtSettings:DurationInMinutes");
+                options.HoursForRefreshToken = configuration.GetValue<int>("JwtSettings:HoursForRefreshToken");
+            });
 
             // 4. Servicios personalizados
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddTransient<IUserRepository, UserRepository>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IHealthChecker, HealthChecker>();
-            services.AddScoped<IExternalAuthService,  ExternalAuthService>();   
+            services.AddScoped<IExternalAuthService, ExternalAuthService>();
             services.AddScoped(typeof(IAsyncRepository<>), typeof(RepositoryBase<>));
 
             // 5. AutoMapper
             services.AddAutoMapper(Assembly.GetExecutingAssembly());
 
-            services
-                .AddGrpcServices(configuration);
+            // 6. gRPC Services (configuración dinámica)
+            services.AddGrpcServices(configuration);
+
             return services;
         }
     }

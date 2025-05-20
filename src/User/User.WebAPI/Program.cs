@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
 using User.Application.Models;
 using User.Infrastructure;
@@ -11,21 +12,34 @@ using User.WebAPI.Middlewares;
 using Users.Application;
 
 var builder = WebApplication.CreateBuilder(args);
-var grpcPort = builder.Configuration.GetValue<int>("Grpc:Port");
-var restPort = builder.Configuration.GetValue<int>("RestPort");
-var isProduction = builder.Environment.IsProduction();
-var isKubernetes = builder.Configuration.GetValue<bool>("IsKubernetes", false); // Nueva variable
 
-// 1. Configuración básica del servicio
+// 0. Detección automática de entorno
+var isKubernetes = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
+var isProduction = builder.Environment.IsProduction();
+
+// 1. Configuración de puertos
+var grpcPort = isKubernetes
+    ? int.Parse(Environment.GetEnvironmentVariable("GRPC_PORT") ?? "5001")
+    : builder.Configuration.GetValue<int>("Grpc:Port");
+
+var restPort = isKubernetes
+    ? int.Parse(Environment.GetEnvironmentVariable("REST_PORT") ?? "80")
+    : builder.Configuration.GetValue<int>("RestPort");
+
+
+
+
+
+// 2. Configuración básica del servicio
 builder.Services.AddControllers();
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
-// 2. Health Checks
+// 3. Health Checks
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<UserIdentityDbContext>();
 
-// 3. Swagger (solo desarrollo)
+// 4. Swagger (solo desarrollo)
 if (!isProduction)
 {
     builder.Services.AddEndpointsApiExplorer();
@@ -40,47 +54,38 @@ if (!isProduction)
     });
 }
 
-// 4. Configuración de Kestrel (HTTP/HTTPS condicional)
+// 5. Configuración de Kestrel
 builder.WebHost.ConfigureKestrel(options =>
 {
     // gRPC (HTTP/2 siempre)
-    options.ListenAnyIP(grpcPort, listenOptions =>
-    {
-        listenOptions.Protocols = HttpProtocols.Http2;
-    });
+    options.ListenAnyIP(grpcPort, listenOptions => listenOptions.Protocols = HttpProtocols.Http2);
 
-    // REST (HTTP/1.1 + HTTPS según entorno)
+    // REST (HTTP/1.1)
     options.ListenAnyIP(restPort, listenOptions =>
     {
         listenOptions.Protocols = HttpProtocols.Http1;
-
-        if (isProduction && !isKubernetes)
-        {
-            // En producción: Certificado real montado en /app/certs/
-            listenOptions.UseHttps("/app/certs/tls.crt", "/app/certs/tls.key");
-        }
-        
+        if (isProduction && !isKubernetes) listenOptions.UseHttps("/app/certs/tls.crt", "/app/certs/tls.key");
     });
 });
 
 var app = builder.Build();
 
-// 5. Inicialización de la BD (solo desarrollo)
-if (!isProduction || isKubernetes) // Ejecuta migraciones en K8s también
+// 6. Inicialización de la BD (solo desarrollo/K8s)
+if (!isProduction || isKubernetes)
 {
     try
     {
         await InitializeDatabase(app);
-        
     }
     catch (Exception ex)
     {
-    
-        if (isProduction) throw; // En producción, falla rápido
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Error inicializando BD");
+        if (isProduction) throw;
     }
 }
 
-// 6. Pipeline HTTP
+// 7. Pipeline HTTP
 if (!isProduction)
 {
     app.UseSwagger();
@@ -92,7 +97,7 @@ app.UseAuthorization();
 app.MapControllers();
 app.UseMiddleware<ExceptionMiddleware>();
 
-// 7. Health Check
+// 8. Health Check
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
     ResponseWriter = async (context, report) =>
@@ -115,7 +120,15 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 app.MapGrpcService<AuthGrpcService>();
 await app.RunAsync();
 
-// Método de inicialización de BD
+
+var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+var connectionString = string.Format(
+    builder.Configuration.GetConnectionString("IdentityConnectionString"),
+    dbPassword
+);
+Console.WriteLine("Cadena de conexión: {0}",
+    connectionString.Replace(dbPassword, "*****")); // Sanitizado
+// Método de inicialización de BD (3 parámetros)
 async Task InitializeDatabase(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
@@ -125,6 +138,7 @@ async Task InitializeDatabase(WebApplication app)
         var context = services.GetRequiredService<UserIdentityDbContext>();
         await context.Database.MigrateAsync();
 
+        // Versión con 3 parámetros (original)
         await DbInitializer.InitializeAsync(
             context,
             services.GetRequiredService<UserManager<ApplicationUser>>(),
@@ -135,5 +149,6 @@ async Task InitializeDatabase(WebApplication app)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "Error inicializando BD");
+        throw;
     }
 }
