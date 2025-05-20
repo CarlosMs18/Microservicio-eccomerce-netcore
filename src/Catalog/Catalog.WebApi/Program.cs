@@ -14,107 +14,182 @@ using System.Net.Http.Headers;
 using User.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
-var restPort = builder.Configuration.GetValue<int>("RestPort");
 
-builder.Services.AddHttpClient<IExternalAuthService, UserHttpService>(client =>
+// ========== CONFIGURACIÓN DE LOGGING ==========
+var logger = LoggerFactory.Create(config =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["UserMicroservice:BaseUrl"]);
-    client.DefaultRequestHeaders.Accept.Clear();
-    client.DefaultRequestHeaders.Accept.Add(
-        new MediaTypeWithQualityHeaderValue("application/json"));
-    client.Timeout = TimeSpan.FromSeconds(
-        builder.Configuration.GetValue<int>("UserMicroservice:TimeoutSeconds")
+    config.AddConsole()
+          .AddConfiguration(builder.Configuration.GetSection("Logging"))
+          .SetMinimumLevel(LogLevel.Debug);
+}).CreateLogger("Catalog.Program");
+
+try
+{
+    logger.LogInformation("====================================");
+    logger.LogInformation("Iniciando Catalog Service");
+    logger.LogInformation("Entorno: {Environment}", builder.Environment.EnvironmentName);
+    logger.LogInformation("====================================");
+
+    // ========== CONFIGURACIÓN DE SERVICIOS ==========
+    var restPort = builder.Configuration.GetValue<int>("RestPort");
+    logger.LogDebug("Configurando puerto REST: {RestPort}", restPort);
+
+    // Configuración HttpClient para UserService
+    builder.Services.AddHttpClient<IExternalAuthService, UserHttpService>(client =>
+    {
+        var baseUrl = builder.Configuration["UserMicroservice:BaseUrl"];
+        var timeoutSeconds = builder.Configuration.GetValue<int>("UserMicroservice:TimeoutSeconds");
+
+        logger.LogDebug("Configurando HttpClient para UserService - URL: {BaseUrl}, Timeout: {Timeout}s",
+            baseUrl, timeoutSeconds);
+
+        client.BaseAddress = new Uri(baseUrl);
+        client.DefaultRequestHeaders.Accept.Clear();
+        client.DefaultRequestHeaders.Accept.Add(
+            new MediaTypeWithQualityHeaderValue("application/json"));
+        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+    })
+    .AddPolicyHandler(HttpClientPolicies.GetRetryPolicy(builder.Configuration))
+    .AddPolicyHandler(HttpClientPolicies.GetCircuitBreakerPolicy(builder.Configuration));
+
+    // Configuración gRPC Client
+    var grpcUrl = builder.Configuration["Grpc:UserUrl"];
+    logger.LogDebug("Configurando gRPC Client para: {GrpcUrl}", grpcUrl);
+
+    builder.Services.AddGrpcClient<AuthService.AuthServiceClient>(options =>
+    {
+        options.Address = new Uri(grpcUrl);
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
+        KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+        KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+        EnableMultipleHttp2Connections = true
+    })
+    .AddPolicyHandler(Policy<HttpResponseMessage>
+        .Handle<RpcException>(e => e.StatusCode == StatusCode.Unavailable)
+        .WaitAndRetryAsync(
+            3,
+            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+            onRetry: (exception, delay, retryCount, context) =>
+            {
+                logger.LogWarning("Intento #{RetryCount} fallido. Reintentando en {Delay}ms...",
+                    retryCount, delay.TotalMilliseconds);
+            }
+        )
     );
-})
-.AddPolicyHandler(HttpClientPolicies.GetRetryPolicy(builder.Configuration))
-.AddPolicyHandler(HttpClientPolicies.GetCircuitBreakerPolicy(builder.Configuration));
 
-builder.Services.AddGrpcClient<AuthService.AuthServiceClient>(options =>
-{
-    options.Address = new Uri(builder.Configuration["Grpc:UserUrl"]);
-})
-.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-{
-    PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
-    KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-    KeepAlivePingTimeout = TimeSpan.FromSeconds(30)
-})
-.AddPolicyHandler(Policy<HttpResponseMessage>
-    .Handle<RpcException>(e => e.StatusCode == StatusCode.Unavailable)
-    .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)))
-);
+    builder.Services.AddSingleton<UserGrpcClient>();
 
+    // Configuración de la base de datos
+    var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+    var connectionString = string.Format(
+        builder.Configuration.GetConnectionString("CatalogConnection"),
+        dbPassword
+    );
 
-builder.Services.AddSingleton<UserGrpcClient>();
+    // Log sanitizado de la conexión
+    logger.LogInformation("Configuración de base de datos:");
+    logger.LogInformation("• Servidor: {Server}", "sql-service.dev.svc.cluster.local");
+    logger.LogInformation("• Base de datos: {Database}", "CatalogDB_Dev");
+    logger.LogInformation("• Timeout: {Timeout}s", 30);
 
+    builder.Services.AddDbContext<CatalogDbContext>(options =>
+        options.UseSqlServer(connectionString,
+            sqlOptions => sqlOptions.MigrationsAssembly(typeof(CatalogDbContext).Assembly.FullName)));
 
-builder.Services.AddControllers();
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddApplicationServices();
-builder.Services.AddInfrastructureServices(builder.Configuration);
+    // Configuración básica de la aplicación
+    builder.Services.AddControllers();
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddApplicationServices();
+    builder.Services.AddInfrastructureServices(builder.Configuration);
 
-if (builder.Environment.IsDevelopment())
-{
-    builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen();
-}
-
-
-builder.WebHost.ConfigureKestrel(options =>
-{
-    // Endpoint para REST (HTTP/1.1)
-    options.ListenAnyIP(restPort, listenOptions =>
+    // Configuración de Swagger
+    if (builder.Environment.IsDevelopment())
     {
-        listenOptions.Protocols = HttpProtocols.Http1;
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen(c =>
+        {
+            c.SwaggerDoc("v1", new()
+            {
+                Title = "Catalog Service API",
+                Version = "v1",
+                Description = "Microservicio para gestión de catálogo de productos"
+            });
+        });
+    }
+
+    // Configuración de Kestrel
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(restPort, listenOptions =>
+        {
+            listenOptions.Protocols = HttpProtocols.Http1;
+            logger.LogDebug("Endpoint HTTP/1.1 configurado en puerto {Port}", restPort);
+        });
     });
 
-    // Opcional: Endpoint para gRPC (HTTP/2) - Solo si Catalog sirve gRPC
-    // options.ListenAnyIP(grpcPort, listenOptions => listenOptions.Protocols = HttpProtocols.Http2);
-});
+    var app = builder.Build();
 
-var app = builder.Build();
-
-if (app.Environment.IsDevelopment())
-{
-    using var scope = app.Services.CreateScope();
-    var services = scope.ServiceProvider;
-
-    try
+    // ========== CONFIGURACIÓN DE MIDDLEWARE ==========
+    if (app.Environment.IsDevelopment())
     {
-        var context = services.GetRequiredService<CatalogDbContext>();
-        await context.Database.MigrateAsync(); // Aplica migraciones
-        await CatalogDbInitializer.InitializeAsync(context); // Seeding
+        app.UseSwagger();
+        app.UseSwaggerUI(c =>
+        {
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Catalog Service v1");
+            c.DisplayRequestDuration();
+        });
+        logger.LogInformation("Swagger habilitado en /swagger");
     }
-    catch (Exception ex)
+
+    // Middleware pipeline
+    app.UseHttpsRedirection();
+    app.UseRouting();
+    app.UseMiddleware<TokenGrpcValidationMiddleware>();
+    app.UseAuthorization();
+    app.MapControllers();
+
+    // Endpoint para protobuf en desarrollo
+    if (app.Environment.IsDevelopment())
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Error inicializando la BD de catálogo");
+        app.MapGet("/proto/auth.proto", async context =>
+        {
+            await context.Response.WriteAsync(
+                await File.ReadAllTextAsync("../User/User.Infrastructure/Protos/auth.proto"));
+        });
     }
-}
 
+    // Middleware de manejo de excepciones
+    app.UseMiddleware<ExceptionMiddleware>();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-app.UseHttpsRedirection();
-app.UseRouting();
-/*app.UseMiddleware<TokenValidationMiddleware>();*/ /*comunicacion HTTP*/
-
-app.UseMiddleware<TokenGrpcValidationMiddleware>(); /*comunicacion GRPC*/
-app.UseAuthorization();
-app.MapControllers();
-
-if (app.Environment.IsDevelopment())
-{
-    app.MapGet("/proto/auth.proto", async context =>
+    // ========== INICIALIZACIÓN DE BD ==========
+    if (app.Environment.IsDevelopment())
     {
-        await context.Response.WriteAsync(
-            await File.ReadAllTextAsync("../User/User.Infrastructure/Protos/auth.proto"));
-    });
+        using var scope = app.Services.CreateScope();
+        var services = scope.ServiceProvider;
+
+        try
+        {
+            logger.LogInformation("Aplicando migraciones de BD...");
+            var context = services.GetRequiredService<CatalogDbContext>();
+            await context.Database.MigrateAsync();
+            await CatalogDbInitializer.InitializeAsync(context);
+            logger.LogInformation("Migraciones aplicadas correctamente");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error aplicando migraciones");
+            throw;
+        }
+    }
+
+    logger.LogInformation("Catalog Service iniciado correctamente");
+    await app.RunAsync();
 }
-
-app.UseMiddleware<ExceptionMiddleware>();
-
-app.Run();
+catch (Exception ex)
+{
+    logger.LogCritical(ex, "Error crítico durante el inicio del servicio");
+    throw;
+}
