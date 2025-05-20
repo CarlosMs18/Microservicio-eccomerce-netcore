@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Shared.Core.Interfaces;
 using System.Reflection;
 using User.Application.Contracts.Persistence;
@@ -20,17 +21,31 @@ namespace User.Infrastructure
             this IServiceCollection services,
             IConfiguration configuration)
         {
+            using var loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder.AddConsole();
+                builder.AddConfiguration(configuration.GetSection("Logging"));
+            });
+            var isKubernetes = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
+            var logger = loggerFactory.CreateLogger("InfrastructureServiceRegistration");
+          
             // 1. Configuración de la DB con manejo dinámico de contraseña
             services.AddDbContext<UserIdentityDbContext>(options =>
             {
                 var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
                 var connectionString = configuration.GetConnectionString("IdentityConnectionString");
 
-                if (string.IsNullOrEmpty(dbPassword))
-                    throw new ArgumentNullException("DB_PASSWORD no está configurado");
+                if (isKubernetes && string.IsNullOrEmpty(dbPassword))
+                {
+                    logger.LogError("DB_PASSWORD no está configurado en Kubernetes");
+                    throw new ArgumentNullException(nameof(dbPassword), "DB_PASSWORD no está configurado para Kubernetes");
+                }
 
-                // Reemplaza {0} por la contraseña (sanitizada para logs)
-                var formattedConnectionString = string.Format(connectionString, dbPassword);
+                // Formatear la cadena de conexión solo si estamos en Kubernetes
+                var formattedConnectionString = isKubernetes
+                    ? string.Format(connectionString, dbPassword)
+                    : connectionString;
+
 
                 options.UseSqlServer(formattedConnectionString,
                     b => b.MigrationsAssembly(typeof(UserIdentityDbContext).Assembly.FullName));

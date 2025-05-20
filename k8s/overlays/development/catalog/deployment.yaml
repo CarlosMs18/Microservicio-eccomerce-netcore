@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-service
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: catalog-service
+  template:
+    metadata:
+      labels:
+        app: catalog-service
+    spec:
+      containers:
+      - name: catalog-service
+        image: tu-imagen-catalog:dev  
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sql-secrets 
+              key: SA_PASSWORD
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Development"
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - mountPath: /app/appsettings.Kubernetes.json
+          name: config
+          subPath: appsettings.Kubernetes.json
+      volumes:
+      - name: config
+        configMap:
+          name: catalog-config

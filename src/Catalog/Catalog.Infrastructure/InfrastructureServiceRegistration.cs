@@ -18,17 +18,17 @@ namespace Catalog.Infrastructure
         {
             services.AddDbContext<CatalogDbContext>(options =>
             {
-                options.UseSqlServer(
-                    configuration.GetConnectionString("CatalogConnection"), // Nombre claro
-                    sqlOptions =>
-                    {
-                        sqlOptions.CommandTimeout(120);
-                        sqlOptions.MigrationsAssembly(typeof(CatalogDbContext).Assembly.FullName); // Para migraciones
-                    }
+                var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+                var connectionString = string.Format(
+                    configuration.GetConnectionString("CatalogConnection"),
+                    dbPassword
                 );
-             
-                // Configuración adicional para GUIDs y otros
-                options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+
+                options.UseSqlServer(connectionString, sqlOptions =>
+                {
+                    sqlOptions.CommandTimeout(120);
+                    sqlOptions.MigrationsAssembly(typeof(CatalogDbContext).Assembly.FullName);
+                });
             });
 
             // Configuración específica para GUIDs como clave primaria
