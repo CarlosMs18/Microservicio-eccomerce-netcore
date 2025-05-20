@@ -15,22 +15,12 @@ spec:
     spec:
       containers:
       - name: catalog-service
-        image: tu-imagen-catalog:dev  
+        image: carlosms18/microservicio-catalog:dev
         env:
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: sql-secrets 
+              name: sql-secrets
               key: SA_PASSWORD
-        - name: ASPNETCORE_ENVIRONMENT
-          value: "Development"
         ports:
         - containerPort: 80
-        volumeMounts:
-        - mountPath: /app/appsettings.Kubernetes.json
-          name: config
-          subPath: appsettings.Kubernetes.json
-      volumes:
-      - name: config
-        configMap:
-          name: catalog-config

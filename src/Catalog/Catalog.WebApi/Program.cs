@@ -25,9 +25,12 @@ var logger = LoggerFactory.Create(config =>
 
 try
 {
+    var isKubernetes = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
+    var isDocker = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"));
+    var environmentName = isKubernetes ? "Kubernetes" : isDocker ? "Docker" : "Local";
     logger.LogInformation("====================================");
     logger.LogInformation("Iniciando Catalog Service");
-    logger.LogInformation("Entorno: {Environment}", builder.Environment.EnvironmentName);
+    logger.LogInformation("Iniciando aplicación en modo: {Environment}", environmentName);
     logger.LogInformation("====================================");
 
     // ========== CONFIGURACIÓN DE SERVICIOS ==========
