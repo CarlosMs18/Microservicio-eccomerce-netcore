@@ -3,8 +3,8 @@ import { check } from 'k6';
 import { uuidv4 } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
 
 // Configuración
-const USER_API_URL = 'https://localhost:7251';
-const CATALOG_API_URL = 'https://localhost:7204';
+const USER_API_URL = 'http://user-service.dev.svc.cluster.local'; 
+const CATALOG_API_URL = 'http://catalog-service.dev.svc.cluster.local';
 const AUTH_ENDPOINT = '/api/User/login';
 const CATEGORY_ENDPOINT = '/api/Category/CreateCategory';
 

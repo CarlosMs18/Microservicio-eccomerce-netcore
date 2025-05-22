@@ -150,7 +150,8 @@ try
     // Middleware pipeline
     app.UseHttpsRedirection();
     app.UseRouting();
-    app.UseMiddleware<TokenGrpcValidationMiddleware>();
+    app.UseMiddleware<TokenValidationMiddleware>();
+    //app.UseMiddleware<TokenGrpcValidationMiddleware>();
     app.UseAuthorization();
     app.MapControllers();
 
