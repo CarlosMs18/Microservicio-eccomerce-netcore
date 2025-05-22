@@ -25,6 +25,19 @@ spec:
             secretKeyRef:
               name: sql-secrets
               key: SA_PASSWORD
+        - name: MSSQL_MEMORY_LIMIT_MB
+          value: "2048"  
+        - name: MSSQL_AGENT_ENABLED
+          value: "true"  
+        - name: MSSQL_TCP_PORT
+          value: "1433"
+        resources:
+          requests:
+            cpu: "1000m"  
+            memory: "2Gi"  
+          limits:
+            cpu: "2000m"  
+            memory: "3Gi" 
         volumeMounts:
         - mountPath: /var/opt/mssql
           name: sql-storage

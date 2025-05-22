@@ -10,7 +10,6 @@ const CATEGORY_ENDPOINT = '/api/Category/CreateCategory';
 
 // Lista de usuarios (todos con la misma contraseña)
 const TEST_USERS = [
-    { email: "c@gmail.com", password: "Ab$12345" },
     { email: "test@gmail.com", password: "Ab$12345" },
     { email: "test1@gmail.com", password: "Ab$12345" },
     { email: "test2@gmail.com", password: "Ab$12345" },
@@ -46,73 +45,91 @@ const TEST_USERS = [
 
 export const options = {
     scenarios: {
-        concurrent_users: {
-            executor: 'per-vu-iterations', // Cada VU ejecuta su propia iteración
-            vus: TEST_USERS.length,        // Número de usuarios = cantidad en TEST_USERS
-            iterations: 6,                // 1 iteración por usuario
-            maxDuration: '2m'
-        }
+        warmup: {
+            executor: 'constant-vus',
+            vus: 5,  // 5 VUs para precalentar
+            duration: '30s',
+        },
+        main_test: {
+            executor: 'constant-vus',
+            vus: TEST_USERS.length, // 31 VUs (igual al tamaño de TEST_USERS)
+            duration: '1m',
+            startTime: '30s', // Inicia después del warmup
+        },
     },
     thresholds: {
-        http_req_duration: ['p(95)<500'], // 95% de las peticiones <500ms
-        http_req_failed: ['rate<0.01']    // Menos del 1% de errores
-    }
+        http_req_duration: ['p(95)<500', 'p(99)<1000'], // Más estricto
+        http_req_failed: ['rate<0.01'],
+        checks: ['rate>0.99'], // 99% de checks deben pasar
+    },
+    noConnectionReuse: false, // Reutiliza conexiones HTTP (mejor rendimiento)
 };
 
 export default function () {
-    // Seleccionar usuario según el VU actual
-    const user = TEST_USERS[__VU - 1]; // __VU empieza en 1
+    // Seleccionar usuario usando módulo para evitar errores
+    const userIndex = (__VU - 1) % TEST_USERS.length;
+    const user = TEST_USERS[userIndex];
 
-    // 1. Login - Cada usuario se autentica independientemente
-    const loginRes = http.post(
-        `${USER_API_URL}${AUTH_ENDPOINT}`,
-        JSON.stringify({ email: user.email, password: user.password }),
-        {
-            headers: { 'Content-Type': 'application/json' },
-            insecureSkipTLSVerify: true
+    // Validación adicional para evitar undefined
+    if (!user) {
+        console.error(`[VU ${__VU}] Usuario no definido en el índice ${userIndex}`);
+        return;
+    }
+
+    // 1. Login (con manejo de errores robusto)
+    let loginRes;
+    try {
+        loginRes = http.post(
+            `${USER_API_URL}${AUTH_ENDPOINT}`,
+            JSON.stringify({ email: user.email, password: user.password }),
+            {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: '30s', // Timeout específico
+            }
+        );
+
+        if (!check(loginRes, {
+            'Login exitoso (200)': (r) => r.status === 200,
+            'Token recibido': (r) => r.json('token') !== null,
+        })) {
+            console.error(`[VU ${__VU}] Login fallido: ${loginRes.status} - ${loginRes.body}`);
+            return;
         }
-    );
-
-    if (!check(loginRes, {
-        'Login exitoso (200)': (r) => r.status === 200,
-        'Token recibido': (r) => r.json('token') !== null
-    })) {
-        console.error(`[VU ${__VU}] Falló login para ${user.email}`);
+    } catch (e) {
+        console.error(`[VU ${__VU}] Error en login: ${e}`);
         return;
     }
 
     const authToken = loginRes.json('token');
 
-    // 2. Crear categoría con nombre único
+    // 2. Crear categoría (con reintentos opcionales)
     const uniqueName = `Cat_${uuidv4()}_${__VU}_${__ITER}`;
-    const categoryPayload = JSON.stringify({
+    const payload = JSON.stringify({
         Request: {
             name: uniqueName,
-            description: "Load test"
-        }
+            description: "Load test",
+        },
     });
 
-    const createRes = http.post(
-        `${CATALOG_API_URL}${CATEGORY_ENDPOINT}`,
-        categoryPayload,
-        {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            insecureSkipTLSVerify: true
-        }
-    );
+    let createRes;
+    try {
+        createRes = http.post(
+            `${CATALOG_API_URL}${CATEGORY_ENDPOINT}`,
+            payload,
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`,
+                },
+                timeout: '30s',
+            }
+        );
 
-    // 3. Verificaciones
-    const checks = check(createRes, {
-        'Status 201 (Created)': (r) => r.status === 201,
-        'ID de categoría generado': (r) => r.json('id') !== null
-    });
-
-    if (!checks) {
-        console.error(`[VU ${__VU}] Error en creación: ${createRes.status} - ${createRes.body}`);
-    } else {
-        console.log(`[VU ${__VU}] Categoría creada: ${uniqueName}`);
+        check(createRes, {
+            'Status 201 (Created)': (r) => r.status === 201,
+            'ID de categoría generado': (r) => r.json('id') !== null,
+        }) || console.error(`[VU ${__VU}] Error en creación: ${createRes.status} - ${createRes.body}`);
+    } catch (e) {
+        console.error(`[VU ${__VU}] Error en creación: ${e}`);
     }
 }
