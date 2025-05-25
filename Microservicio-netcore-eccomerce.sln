@@ -101,6 +101,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{EAC1
 		k8s\overlays\development\user\secrets\app-secret.yaml = k8s\overlays\development\user\secrets\app-secret.yaml
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Infrastructure", "Shared\Shared.Infrastructure\Shared.Infrastructure.csproj", "{70CF99F4-A4E1-4728-8344-69F3217AECE7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -147,6 +149,10 @@ Global
 		{5E8B1B35-F4C5-4B11-9293-463DB67EFEA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5E8B1B35-F4C5-4B11-9293-463DB67EFEA0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5E8B1B35-F4C5-4B11-9293-463DB67EFEA0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{70CF99F4-A4E1-4728-8344-69F3217AECE7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{70CF99F4-A4E1-4728-8344-69F3217AECE7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{70CF99F4-A4E1-4728-8344-69F3217AECE7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{70CF99F4-A4E1-4728-8344-69F3217AECE7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -178,6 +184,7 @@ Global
 		{747AE917-67BD-4107-8185-15B596D03079} = {65E34109-8D8F-4C4C-8F6F-1BF50922642B}
 		{AB554CBE-FB18-479F-86CF-38BB94CC7277} = {9C3D9428-1611-4DEF-8874-62081BE2EFA1}
 		{EAC117B8-726C-412C-8964-1C519FC83E9F} = {87ED10D7-C90C-49DE-9DDF-0D8A4B8E74C8}
+		{70CF99F4-A4E1-4728-8344-69F3217AECE7} = {C6F608F7-B79D-4E34-8E80-2948C251A389}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}

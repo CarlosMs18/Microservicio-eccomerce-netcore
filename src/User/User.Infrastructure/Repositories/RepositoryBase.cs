@@ -1,5 +1,6 @@
 ﻿using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
+using Polly.Retry;
 using System.Linq.Expressions;
 using User.Application.Contracts.Persistence;
 using User.Infrastructure.Persistence;
@@ -10,16 +11,24 @@ namespace User.Infrastructure.Repositories
     public class RepositoryBase<T> : IAsyncRepository<T> where T : class
     {
         protected readonly UserIdentityDbContext _identityDbContext;
+        private readonly AsyncRetryPolicy _retryPolicy;
 
-        public RepositoryBase( UserIdentityDbContext identityDbContext)
+        public RepositoryBase(UserIdentityDbContext identityDbContext, AsyncRetryPolicy retryPolicy)
         {
             _identityDbContext = identityDbContext;
+            _retryPolicy = retryPolicy;
         }
         public async Task<IReadOnlyList<T>> GetAsync()
         {
-            return await _identityDbContext.Set<T>().ToListAsync();
+            return await _retryPolicy.ExecuteAsync(async () =>
+                await _identityDbContext.Set<T>().ToListAsync());
         }
 
+        public async Task<T> GetById(int id)
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+                await _identityDbContext.Set<T>().FindAsync(id));
+        }
         public void AddEntity(T entity)
         {
             _identityDbContext.Set<T>().Add(entity);
@@ -43,10 +52,7 @@ namespace User.Infrastructure.Repositories
         {
             _identityDbContext.Set<T>().Remove(entity);
         }
-        public async Task<T> GetById(int id)
-        {
-            return await _identityDbContext.Set<T>().FindAsync(id);
-        }
+      
         public async void BulkUpdateEntity(List<T> list)
         {
             await _identityDbContext.BulkUpdateAsync(list);
@@ -61,7 +67,8 @@ namespace User.Infrastructure.Repositories
         }
         public async Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate)
         {
-            return await _identityDbContext.Set<T>().Where(predicate).ToListAsync();
+            return await _retryPolicy.ExecuteAsync(async () =>
+                await _identityDbContext.Set<T>().Where(predicate).ToListAsync());
         }
 
         public async Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate = null,

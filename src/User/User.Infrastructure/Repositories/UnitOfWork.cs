@@ -1,5 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Polly.Retry;
 using System.Collections;
 using User.Application.Contracts.Persistence;
 using User.Infrastructure.Persistence;
@@ -10,28 +13,36 @@ namespace User.Infrastructure.Repositories
     {
         private Hashtable _repositories;
         private readonly UserIdentityDbContext _userIdentityDbContext;
-        private IDbContextTransaction transaction;
-        private IUserRepository _userRepository;    
+        private readonly IServiceProvider _serviceProvider;
+        private readonly ILogger<UnitOfWork> _logger;
+        private IDbContextTransaction _transaction;
+        private IUserRepository _userRepository;
 
-        public UnitOfWork(UserIdentityDbContext userIdentityDbContext)
+        // Constructor: Elimina AsyncRetryPolicy de aquí (no se usa en UnitOfWork)
+        public UnitOfWork(
+            UserIdentityDbContext userIdentityDbContext,
+            ILogger<UnitOfWork> logger)
         {
             _userIdentityDbContext = userIdentityDbContext;
-
+            _logger = logger;
+            _repositories = new Hashtable();
         }
 
         public UserIdentityDbContext userIdentityDbContext => _userIdentityDbContext;
-        public IUserRepository UserRepository => _userRepository ??= new UserRepository(_userIdentityDbContext);
+        public IUserRepository UserRepository => _userRepository ??=
+                        _serviceProvider.GetRequiredService<IUserRepository>();
 
         public async Task BeginTransaction()
         {
-            transaction = await _userIdentityDbContext.Database.BeginTransactionAsync();
+            _transaction = await _userIdentityDbContext.Database.BeginTransactionAsync();
         }
 
         public async Task Commit()
         {
-            await transaction.CommitAsync();
+            await _transaction.CommitAsync();
         }
 
+        // Complete SIN Polly (para escrituras)
         public async Task<int> Complete()
         {
             try
@@ -40,19 +51,18 @@ namespace User.Infrastructure.Repositories
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
-                Console.WriteLine(ex.Message);
-                throw new Exception("Error en UnitOfWork: " + ex.InnerException?.Message, ex);
-                throw new Exception(ex.Message);
+                _logger.LogError(ex, "Error en UnitOfWork.Complete");
+                throw; // Propaga el error para manejo en capa superior
             }
         }
 
-
         public void Dispose()
         {
+            _transaction?.Dispose();
             _userIdentityDbContext.Dispose();
         }
 
+        // ExecStoreProcedure SIN Polly (usa try/catch manual si es crítico)
         public async Task<int> ExecStoreProcedure(string sql, params object[] parameters)
         {
             return await _userIdentityDbContext.Database.ExecuteSqlRawAsync(sql, parameters);
@@ -70,7 +80,9 @@ namespace User.Infrastructure.Repositories
             if (!_repositories.ContainsKey(type))
             {
                 var repositoryType = typeof(RepositoryBase<>);
-                var repositoryInstance = Activator.CreateInstance(repositoryType.MakeGenericType(typeof(TEntity)), _userIdentityDbContext);
+                var repositoryInstance = Activator.CreateInstance(
+                    repositoryType.MakeGenericType(typeof(TEntity)),
+                    _userIdentityDbContext);
                 _repositories.Add(type, repositoryInstance);
             }
 
@@ -79,8 +91,7 @@ namespace User.Infrastructure.Repositories
 
         public async Task Rollback()
         {
-            await transaction.RollbackAsync();
+            await _transaction.RollbackAsync();
         }
     }
-
 }
