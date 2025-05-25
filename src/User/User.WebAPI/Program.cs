@@ -2,8 +2,10 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
+using Polly;
 using System.Data.SqlClient;
 using User.Application.Models;
 using User.Infrastructure;
@@ -14,128 +16,193 @@ using Users.Application;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configuración avanzada del logger
+// ========== CONFIGURACIÓN MULTIFUENTE ==========
+builder.Configuration
+    .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+    .AddEnvironmentVariables(); // Para Docker/K8s
+
+// ========== LOGGING AVANZADO ==========
 var logger = LoggerFactory.Create(config =>
 {
     config.AddConsole()
           .AddConfiguration(builder.Configuration.GetSection("Logging"))
+          .AddJsonConsole() // Mejor formato para logs estructurados
           .SetMinimumLevel(LogLevel.Debug);
-}).CreateLogger("Program");
+}).CreateLogger("Bootstrap");
 
 try
 {
-    // ========== DETECCIÓN DE ENTORNO ==========
-    var isKubernetes = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
-    var isDocker = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"));
-    var environmentName = isKubernetes ? "Kubernetes" : isDocker ? "Docker" : "Local";
-    var isProduction = builder.Environment.IsProduction();
-
-    logger.LogInformation("====================================");
-    logger.LogInformation("Iniciando aplicación en modo: {Environment}", environmentName);
-    logger.LogInformation("====================================");
-
-    // ========== VALIDACIÓN DE CONFIGURACIÓN ==========
-    if (isKubernetes)
+    // ========== DETECCIÓN DE ENTORNO MEJORADA ==========
+    var environmentInfo = new
     {
-        logger.LogDebug("Configuración Kubernetes detectada");
-        logger.LogDebug("Variables K8s:");
-        logger.LogDebug("• GRPC_PORT: {GrpcPort}", Environment.GetEnvironmentVariable("GRPC_PORT"));
-        logger.LogDebug("• REST_PORT: {RestPort}", Environment.GetEnvironmentVariable("REST_PORT"));
-        logger.LogDebug("• DB_PASSWORD: {DbPasswordStatus}",
-            string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DB_PASSWORD")) ? "No configurada" : "Configurada");
-    }
-    else if (isDocker)
-    {
-        logger.LogDebug("Configuración Docker detectada");
-        logger.LogDebug("• Archivo de configuración: appsettings.Docker.json");
-    }
-    else
-    {
-        logger.LogDebug("Configuración Local detectada");
-        logger.LogDebug("• Archivo de configuración: appsettings.Development.json");
-    }
+        IsKubernetes = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")),
+        IsDocker = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")),
+        EnvironmentName = builder.Environment.EnvironmentName,
+        IsProduction = builder.Environment.IsProduction()
+    };
 
-    // ========== CONFIGURACIÓN DE PUERTOS ==========
-    var grpcPort = isKubernetes
-        ? int.Parse(Environment.GetEnvironmentVariable("GRPC_PORT") ?? "5001")
-        : builder.Configuration.GetValue<int>("Grpc:Port");
+    logger.LogInformation("""
+        ====================================
+        Iniciando aplicación en modo: {Environment}
+        • Kubernetes: {IsK8s}
+        • Docker: {IsDocker}
+        • Producción: {IsProd}
+        ====================================
+        """,
+        environmentInfo.EnvironmentName,
+        environmentInfo.IsKubernetes,
+        environmentInfo.IsDocker,
+        environmentInfo.IsProduction);
 
-    var restPort = isKubernetes
-        ? int.Parse(Environment.GetEnvironmentVariable("REST_PORT") ?? "80")
-        : builder.Configuration.GetValue<int>("RestPort");
-
-    logger.LogInformation("Puertos configurados:");
-    logger.LogInformation("• gRPC: {GrpcPort} (HTTP/2)", grpcPort);
-    logger.LogInformation("• REST: {RestPort} (HTTP/1.1)", restPort);
+    // ========== CONFIGURACIÓN DE RESILIENCIA ==========
+    builder.Services.AddHttpClient("RetryClient")
+        .AddTransientHttpErrorPolicy(policy =>
+            policy.WaitAndRetryAsync(3, retryAttempt =>
+                TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
 
     // ========== CONFIGURACIÓN DE SERVICIOS ==========
     builder.Services.AddControllers();
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration);
 
-    // Health Checks con detalles
+    // ========== HEALTH CHECKS MEJORADOS ==========
     builder.Services.AddHealthChecks()
-        .AddDbContextCheck<UserIdentityDbContext>(
-            name: "sqlserver",
-            tags: new[] { "db", "sqlserver" });
+      .AddDbContextCheck<UserIdentityDbContext>(
+          name: "sqlserver",
+          tags: new[] { "db", "sqlserver" })
+      // Verificación básica de que el servicio está vivo
+      .AddCheck("service_status", () =>
+          HealthCheckResult.Healthy("Service is responsive"),
+          tags: new[] { "service" });
 
-    // Swagger solo en desarrollo
-    if (!isProduction)
+    // ========== SWAGGER CONFIGURABLE ==========
+    if (!environmentInfo.IsProduction)
     {
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
         {
             c.SwaggerDoc("v1", new OpenApiInfo
             {
-                Title = "Microservicio de Usuarios",
+                Title = $"User Service API - {environmentInfo.EnvironmentName}",
                 Version = "v1",
-                Description = "API para gestión de usuarios y autenticación",
+                Description = $"Environment: {environmentInfo.EnvironmentName}",
                 Contact = new OpenApiContact
                 {
-                    Name = "Equipo de Desarrollo",
+                    Name = "Dev Team",
                     Email = "dev@example.com"
                 }
             });
+
+            // Configuración adicional para ambientes no productivos
+            if (environmentInfo.EnvironmentName == "Development")
+            {
+                c.EnableAnnotations();
+            }
         });
     }
 
-    // Configuración avanzada de Kestrel
+    // ========== CONFIGURACIÓN AVANZADA DE KESTREL ==========
+    ConfigureKestrel(builder, environmentInfo, logger);
+
+    var app = builder.Build();
+
+    // ========== PIPELINE CONFIGURATION ==========
+    ConfigurePipeline(app, environmentInfo, logger);
+
+    // ========== INICIALIZACIÓN ==========
+    await InitializeApplication(app, logger);
+
+    logger.LogInformation("""
+        ====================================
+        Aplicación iniciada correctamente
+        Entorno: {Environment}
+        UTC Time: {StartTime}
+        ====================================
+        """,
+        environmentInfo.EnvironmentName,
+        DateTime.UtcNow);
+
+    await app.RunAsync();
+}
+catch (Exception ex)
+{
+    logger.LogCritical(ex, """
+        ====================================
+        ERROR CRÍTICO DURANTE EL INICIO
+        Mensaje: {ErrorMessage}
+        ====================================
+        """, ex.Message);
+    throw;
+}
+
+// ========== MÉTODOS AUXILIARES ==========
+
+void ConfigureKestrel(WebApplicationBuilder builder, dynamic environmentInfo, ILogger logger)
+{
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10MB
+        options.Limits.MinRequestBodyDataRate = null; // Para evitar timeouts en uploads grandes
 
-        // gRPC
+        // Configuración dinámica de puertos
+        var grpcPort = environmentInfo.IsKubernetes
+            ? int.Parse(Environment.GetEnvironmentVariable("GRPC_PORT") ?? "5001")
+            : builder.Configuration.GetValue<int>("Grpc:Port");
+
+        var restPort = environmentInfo.IsKubernetes
+            ? int.Parse(Environment.GetEnvironmentVariable("REST_PORT") ?? "80")
+            : builder.Configuration.GetValue<int>("RestPort");
+
+        // gRPC Endpoint
         options.ListenAnyIP(grpcPort, listenOptions =>
         {
             listenOptions.Protocols = HttpProtocols.Http2;
-            logger.LogDebug("Endpoint gRPC configurado en puerto {Port}", grpcPort);
+            logger.LogDebug("gRPC endpoint configurado en puerto {Port}", grpcPort);
         });
 
-        // REST
+        // REST Endpoint
         options.ListenAnyIP(restPort, listenOptions =>
         {
             listenOptions.Protocols = HttpProtocols.Http1;
-            if (isProduction && !isKubernetes)
+            if (environmentInfo.IsProduction && !environmentInfo.IsKubernetes)
             {
                 listenOptions.UseHttps("/app/certs/tls.crt", "/app/certs/tls.key");
                 logger.LogDebug("HTTPS habilitado para REST");
             }
-            logger.LogDebug("Endpoint REST configurado en puerto {Port}", restPort);
+            logger.LogDebug("REST endpoint configurado en puerto {Port}", restPort);
         });
     });
+}
 
-    var app = builder.Build();
+void ConfigurePipeline(WebApplication app, dynamic environmentInfo, ILogger logger)
+{
+    // Middleware de logging de requests
+    app.Use(async (context, next) =>
+    {
+        var startTime = DateTime.UtcNow;
+        logger.LogDebug("Iniciando request: {Method} {Path}",
+            context.Request.Method,
+            context.Request.Path);
 
-    // ========== CONFIGURACIÓN DE MIDDLEWARE ==========
-    if (!isProduction)
+        await next();
+
+        logger.LogDebug("Request completado: {Method} {Path} - {StatusCode} en {ElapsedMs}ms",
+            context.Request.Method,
+            context.Request.Path,
+            context.Response.StatusCode,
+            (DateTime.UtcNow - startTime).TotalMilliseconds);
+    });
+
+    if (!environmentInfo.IsProduction)
     {
         app.UseSwagger();
         app.UseSwaggerUI(c =>
         {
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "UsuarioService v1");
-            c.DisplayRequestDuration();
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "User Service API");
+            c.ConfigObject.DisplayRequestDuration = true;
+            c.EnablePersistAuthorization();
         });
-        logger.LogInformation("Swagger habilitado en /swagger");
     }
 
     app.UseRouting();
@@ -143,7 +210,7 @@ try
     app.MapControllers();
     app.UseMiddleware<ExceptionMiddleware>();
 
-    // Health Check endpoint con logging
+    // Health Check mejorado
     app.MapHealthChecks("/health", new HealthCheckOptions
     {
         Predicate = _ => true,
@@ -152,6 +219,7 @@ try
             var result = new
             {
                 status = report.Status.ToString(),
+                environment = environmentInfo.EnvironmentName,
                 checks = report.Entries.Select(e => new
                 {
                     name = e.Key,
@@ -161,76 +229,63 @@ try
                 })
             };
             await context.Response.WriteAsJsonAsync(result);
-
-            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-            logger.LogDebug("Health check ejecutado. Estado: {Status}", report.Status);
         }
     });
 
-    // ========== CONFIGURACIÓN gRPC ==========
+    // gRPC Service
     app.MapGrpcService<AuthGrpcService>();
-    logger.LogDebug("Servicio gRPC 'AuthGrpcService' mapeado");
+}
 
-    // ========== INFORMACIÓN DE CONEXIÓN ==========
+async Task InitializeApplication(WebApplication app, ILogger logger)
+{
+    // Configuración de base de datos
     var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
     var connectionString = string.Format(
-        builder.Configuration.GetConnectionString("IdentityConnectionString"),
+        app.Configuration.GetConnectionString("IdentityConnectionString"),
         dbPassword
     );
 
-    // Log detallado de conexión (sin exponer contraseña)
-    var connectionStringBuilder = new SqlConnectionStringBuilder(connectionString);
-    logger.LogInformation("Configuración de base de datos:");
-    logger.LogInformation("• Servidor: {Server}", connectionStringBuilder.DataSource);
-    logger.LogInformation("• Base de datos: {Database}", connectionStringBuilder.InitialCatalog);
-    logger.LogInformation("• Usuario: {User}", connectionStringBuilder.UserID);
-    logger.LogInformation("• Timeout: {Timeout}s", connectionStringBuilder.ConnectTimeout);
-    if (isKubernetes && string.IsNullOrEmpty(dbPassword))
-    {
-        logger.LogError("DB_PASSWORD no configurado en Kubernetes");
-        throw new ArgumentNullException(nameof(dbPassword));
-    }
+    // Log seguro de conexión (sin exponer credenciales)
+    var connectionBuilder = new SqlConnectionStringBuilder(connectionString);
+    logger.LogInformation("""
+        Configuración de base de datos:
+        • Servidor: {Server}
+        • Base de datos: {Database}
+        • Usuario: {User}
+        • Timeout: {Timeout}s
+        • Pool size: {MaxPoolSize}
+        """,
+        connectionBuilder.DataSource,
+        connectionBuilder.InitialCatalog,
+        connectionBuilder.UserID,
+        connectionBuilder.ConnectTimeout,
+        connectionBuilder.MaxPoolSize);
 
-    // ========== INICIALIZACIÓN DE BD ==========
-    if (!isProduction || isKubernetes)
+    // Inicialización condicional de BD
+    if (!app.Environment.IsProduction() ||
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
     {
-        try
-        {
-            await InitializeDatabase(app);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error crítico durante la inicialización de BD");
-            if (isProduction) throw;
-        }
+        await InitializeDatabase(app, logger);
     }
-
-    logger.LogInformation("Aplicación iniciada correctamente en modo {Environment}", environmentName);
-    await app.RunAsync();
-}
-catch (Exception ex)
-{
-    logger.LogCritical(ex, "Error crítico durante el inicio de la aplicación");
-    throw;
 }
 
-async Task InitializeDatabase(WebApplication app)
+async Task InitializeDatabase(WebApplication app, ILogger logger)
 {
     using var scope = app.Services.CreateScope();
     var services = scope.ServiceProvider;
-    var logger = services.GetRequiredService<ILogger<Program>>();
+    var dbLogger = services.GetRequiredService<ILogger<Program>>();
 
     try
     {
-        logger.LogInformation("Iniciando migración de base de datos...");
+        dbLogger.LogInformation("Iniciando migración de base de datos...");
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
         var context = services.GetRequiredService<UserIdentityDbContext>();
         await context.Database.MigrateAsync();
 
-        logger.LogInformation("Migración completada en {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+        dbLogger.LogInformation("Migración completada en {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
 
-        logger.LogInformation("Inicializando datos base...");
+        dbLogger.LogInformation("Inicializando datos base...");
         stopwatch.Restart();
 
         await DbInitializer.InitializeAsync(
@@ -239,11 +294,18 @@ async Task InitializeDatabase(WebApplication app)
             services.GetRequiredService<RoleManager<ApplicationRole>>()
         );
 
-        logger.LogInformation("Inicialización de datos completada en {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+        dbLogger.LogInformation("""
+            Inicialización completada en {ElapsedMs}ms
+            • Usuarios creados: {UserCount}
+            • Roles creados: {RoleCount}
+            """,
+            stopwatch.ElapsedMilliseconds,
+            context.Users.Count(),
+            context.Roles.Count());
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Error durante la inicialización de BD");
-        throw;
+        dbLogger.LogError(ex, "Error durante la inicialización de BD");
+        if (app.Environment.IsProduction()) throw;
     }
 }
