@@ -27,6 +27,15 @@ namespace Catalog.Infrastructure.Persistence
                     idProperty.SetDefaultValueSql("NEWSEQUENTIALID()");
                 }
             }
+            modelBuilder.Entity<Category>()
+               .HasMany(c => c.Products)
+               .WithOne(p => p.Category)
+               .HasForeignKey(p => p.CategoryId)
+               .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Category>()
+                .HasIndex(c => c.Name)
+                .IsUnique(); // Names únicos
 
             modelBuilder.Entity<Product>()
                .HasMany(p => p.Images)
@@ -34,12 +43,12 @@ namespace Catalog.Infrastructure.Persistence
                .HasForeignKey(pi => pi.ProductId)
                .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<Product>()
+              .HasIndex(p => new { p.CategoryId, p.IsActive });
 
-            modelBuilder.Entity<Category>()
-                .HasMany(c => c.Products)
-                .WithOne(p => p.Category)
-                .HasForeignKey(p => p.CategoryId)
-                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Product>()
+                .HasIndex(p => p.Name);
+
         }
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

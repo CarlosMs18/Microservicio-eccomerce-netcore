@@ -150,8 +150,9 @@ try
     // Middleware pipeline
     app.UseHttpsRedirection();
     app.UseRouting();
-    app.UseMiddleware<TokenValidationMiddleware>();
-    //app.UseMiddleware<TokenGrpcValidationMiddleware>();
+    app.UseMiddleware<TokenGrpcValidationMiddleware>();
+    //app.UseMiddleware<TokenValidationMiddleware>();
+   
     app.UseAuthorization();
     app.MapControllers();
 
@@ -167,6 +168,7 @@ try
 
     // Middleware de manejo de excepciones
     app.UseMiddleware<ExceptionMiddleware>();
+
 
     // ========== INICIALIZACIÓN DE BD ==========
     if (app.Environment.IsDevelopment())
