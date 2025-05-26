@@ -1,4 +1,4 @@
-    using Catalog.Application;
+Ôªøusing Catalog.Application;
 using Catalog.Infrastructure;
 using Catalog.Infrastructure.Persistence;
 using Catalog.Infrastructure.Resilience;
@@ -10,198 +10,228 @@ using Grpc.Net.Client;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Polly;
+using Serilog;
+using Serilog.Events;
+using Serilog.Formatting.Compact;
 using Shared.Core.Interfaces;
 using System.Net.Http.Headers;
 using User.Auth;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// ========== CONFIGURACI”N DE LOGGING ==========
-var logger = LoggerFactory.Create(config =>
-{
-    config.AddConsole()
-          .AddConfiguration(builder.Configuration.GetSection("Logging"))
-          .SetMinimumLevel(LogLevel.Debug);
-}).CreateLogger("Catalog.Program");
+// Bootstrap logger
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Debug()
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .CreateBootstrapLogger();
 
 try
 {
-    var isKubernetes = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
-    var isDocker = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"));
-    var environmentName = isKubernetes ? "Kubernetes" : isDocker ? "Docker" : "Local";
-    logger.LogInformation("====================================");
-    logger.LogInformation("Iniciando Catalog Service");
-    logger.LogInformation("Iniciando aplicaciÛn en modo: {Environment}", environmentName);
-    logger.LogInformation("====================================");
+    Log.Information("üöÄ Iniciando Catalog Service");
 
-    // ========== CONFIGURACI”N DE SERVICIOS ==========
-    var restPort = builder.Configuration.GetValue<int>("RestPort");
-    logger.LogDebug("Configurando puerto REST: {RestPort}", restPort);
+    var builder = WebApplication.CreateBuilder(args);
 
-    // ConfiguraciÛn HttpClient para UserService
+    // Detect environment
+    var environment = DetectEnvironment();
+    Log.Information("üîß Entorno detectado: {Environment}", environment);
+
+    // Load configuration
+    builder.Configuration
+        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+        .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+        .AddEnvironmentVariables();
+
+    // Configure Serilog
+    // Configuraci√≥n √≥ptima para producci√≥n
+    builder.Host.UseSerilog((ctx, services, config) =>
+    {
+        config.MinimumLevel.Information()
+              .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+              .MinimumLevel.Override("System", LogEventLevel.Warning)
+              .Enrich.FromLogContext()
+              .WriteTo.Async(a => a.Console()) // ‚Üê ¬°Importante para performance!
+              .WriteTo.Async(a => a.File(
+                  new CompactJsonFormatter(),
+                  "logs/log-.json",
+                  rollingInterval: RollingInterval.Day,
+                  retainedFileCountLimit: 15,
+                  buffered: true)); // ‚Üê Buffering para mejor performance
+    });
+
+    // Configure HttpClient para servicio externo
     builder.Services.AddHttpClient<IExternalAuthService, UserHttpService>(client =>
     {
         var baseUrl = builder.Configuration["UserMicroservice:BaseUrl"];
-        var timeoutSeconds = builder.Configuration.GetValue<int>("UserMicroservice:TimeoutSeconds");
-
-        logger.LogDebug("Configurando HttpClient para UserService - URL: {BaseUrl}, Timeout: {Timeout}s",
-            baseUrl, timeoutSeconds);
+        var timeout = builder.Configuration.GetValue<int>("UserMicroservice:TimeoutSeconds");
 
         client.BaseAddress = new Uri(baseUrl);
         client.DefaultRequestHeaders.Accept.Clear();
-        client.DefaultRequestHeaders.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
-        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        client.Timeout = TimeSpan.FromSeconds(timeout);
     })
     .AddPolicyHandler(HttpClientPolicies.GetRetryPolicy(builder.Configuration))
     .AddPolicyHandler(HttpClientPolicies.GetCircuitBreakerPolicy(builder.Configuration));
 
-    // ConfiguraciÛn gRPC Client
+    // Configurar gRPC Client
     var grpcUrl = builder.Configuration["Grpc:UserUrl"]!;
-    logger.LogDebug("Configurando gRPC Client para: {GrpcUrl}", grpcUrl);
-
     builder.Services.AddGrpcClient<AuthService.AuthServiceClient>(options =>
     {
         options.Address = new Uri(grpcUrl);
     })
-.ConfigureChannel(o =>
-{
-    o.HttpHandler = new SocketsHttpHandler
+    .ConfigureChannel(o =>
     {
-        PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
-        KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-        KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
-        EnableMultipleHttp2Connections = true
-    };
-})
-.AddPolicyHandler(Policy<HttpResponseMessage>
-    .Handle<RpcException>(e =>
-        e.StatusCode == StatusCode.Unavailable ||
-        e.StatusCode == StatusCode.DeadlineExceeded)
-    .WaitAndRetryAsync(3, retryAttempt =>
-        TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
+        o.HttpHandler = new SocketsHttpHandler
+        {
+            PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
+            KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+            KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+            EnableMultipleHttp2Connections = true
+        };
+    })
+    .AddPolicyHandler(Policy<HttpResponseMessage>
+        .Handle<RpcException>(e =>
+            e.StatusCode == StatusCode.Unavailable ||
+            e.StatusCode == StatusCode.DeadlineExceeded)
+        .WaitAndRetryAsync(3, retryAttempt =>
+            TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
 
     builder.Services.AddSingleton<IUserGrpcClient, UserGrpcClient>();
 
-    builder.Services.AddSingleton(provider =>
-        GrpcChannel.ForAddress(
-            grpcUrl,
-            new GrpcChannelOptions
-            {
-                HttpHandler = provider.GetRequiredService<SocketsHttpHandler>()
-            }));
+    // Obtener cadena de conexi√≥n en base al entorno
+    var connectionString = GetConnectionString(builder.Configuration, environment);
+    Log.Information("üóÉÔ∏è DB para {Environment}: {Database} en {Server}", environment,
+        GetDatabaseNameFromConnectionString(connectionString),
+        GetServerNameFromConnectionString(connectionString));
 
-    // ConfiguraciÛn de la base de datos
-    var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
-    var connectionString = string.Format(
-        builder.Configuration.GetConnectionString("CatalogConnection"),
-        dbPassword
-    );
-
-    // Log sanitizado de la conexiÛn
-    logger.LogInformation("ConfiguraciÛn de base de datos:");
-    logger.LogInformation("ï Servidor: {Server}", "sql-service.dev.svc.cluster.local");
-    logger.LogInformation("ï Base de datos: {Database}", "CatalogDB_Dev");
-    logger.LogInformation("ï Timeout: {Timeout}s", 30);
-
-    builder.Services.AddDbContext<CatalogDbContext>(options =>
-        options.UseSqlServer(connectionString,
-            sqlOptions => sqlOptions.MigrationsAssembly(typeof(CatalogDbContext).Assembly.FullName)));
-
-    // ConfiguraciÛn b·sica de la aplicaciÛn
+    // Agregar servicios
     builder.Services.AddControllers();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration);
 
-    // ConfiguraciÛn de Swagger
-    if (builder.Environment.IsDevelopment())
+    if (environment == "Local")
     {
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
         {
-            c.SwaggerDoc("v1", new()
-            {
-                Title = "Catalog Service API",
-                Version = "v1",
-                Description = "Microservicio para gestiÛn de cat·logo de productos"
-            });
+            c.SwaggerDoc("v1", new() { Title = "Catalog API", Version = "v1" });
         });
     }
 
-    // ConfiguraciÛn de Kestrel
+    // Configuraci√≥n de Kestrel
+    var restPort = builder.Configuration.GetValue<int>("RestPort");
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(restPort, listenOptions =>
         {
             listenOptions.Protocols = HttpProtocols.Http1;
-            logger.LogDebug("Endpoint HTTP/1.1 configurado en puerto {Port}", restPort);
+            Log.Debug("üåê HTTP configurado en puerto {Port}", restPort);
         });
     });
 
     var app = builder.Build();
 
-    // ========== CONFIGURACI”N DE MIDDLEWARE ==========
-    if (app.Environment.IsDevelopment())
+    // Middleware
+    if (environment == "Local")
     {
         app.UseSwagger();
         app.UseSwaggerUI(c =>
         {
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Catalog Service v1");
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Catalog v1");
             c.DisplayRequestDuration();
         });
-        logger.LogInformation("Swagger habilitado en /swagger");
-    }
 
-    // Middleware pipeline
-    app.UseHttpsRedirection();
-    app.UseRouting();
-   // app.UseMiddleware<TokenGrpcValidationMiddleware>();
-   app.UseMiddleware<TokenValidationMiddleware>();
-   
-    app.UseAuthorization();
-    app.MapControllers();
-
-    // Endpoint para protobuf en desarrollo
-    if (app.Environment.IsDevelopment())
-    {
         app.MapGet("/proto/auth.proto", async context =>
         {
-            await context.Response.WriteAsync(
-                await File.ReadAllTextAsync("../User/User.Infrastructure/Protos/auth.proto"));
+            await context.Response.WriteAsync(await File.ReadAllTextAsync("../User/User.Infrastructure/Protos/auth.proto"));
         });
     }
 
-    // Middleware de manejo de excepciones
+    app.UseHttpsRedirection();
+    app.UseRouting();
+    app.UseMiddleware<TokenValidationMiddleware>();
+    app.UseAuthorization();
+    app.MapControllers();
     app.UseMiddleware<ExceptionMiddleware>();
+    app.UseSerilogRequestLogging();
 
-
-    // ========== INICIALIZACI”N DE BD ==========
-    if (app.Environment.IsDevelopment())
+    // Migraciones de BD
+    if (environment is "Local" or "Docker")
     {
         using var scope = app.Services.CreateScope();
         var services = scope.ServiceProvider;
-
         try
         {
-            logger.LogInformation("Aplicando migraciones de BD...");
-            var context = services.GetRequiredService<CatalogDbContext>();
-            await context.Database.MigrateAsync();
-            await CatalogDbInitializer.InitializeAsync(context);
-            logger.LogInformation("Migraciones aplicadas correctamente");
+            var db = services.GetRequiredService<CatalogDbContext>();
+            await db.Database.MigrateAsync();
+            await CatalogDbInitializer.InitializeAsync(db);
+            Log.Information("üÜó Migraciones aplicadas");
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error aplicando migraciones");
+            Log.Error(ex, "‚ùå Error aplicando migraciones");
             throw;
         }
     }
 
-    logger.LogInformation("Catalog Service iniciado correctamente");
+    Log.Information("‚úÖ Catalog Service listo y ejecut√°ndose");
     await app.RunAsync();
 }
 catch (Exception ex)
 {
-    logger.LogCritical(ex, "Error crÌtico durante el inicio del servicio");
+    Log.Fatal(ex, "‚ùå Error cr√≠tico al iniciar el servicio");
     throw;
+}
+finally
+{
+    Log.CloseAndFlush();
+}
+
+// ========== M√âTODOS AUXILIARES ==========
+
+static string DetectEnvironment()
+{
+    if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+        return "Kubernetes";
+    if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
+        return "Docker";
+    return "Local";
+}
+
+static string GetConnectionString(IConfiguration config, string environment)
+{
+    var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+
+    return environment switch
+    {
+        "Kubernetes" => string.Format(
+            config.GetConnectionString("KubernetesConnection") ?? config.GetConnectionString("CatalogConnection")!,
+            dbPassword ?? throw new ArgumentNullException(nameof(dbPassword), "DB_PASSWORD requerido en Kubernetes")),
+        "Docker" => config.GetConnectionString("DockerConnection") ?? config.GetConnectionString("CatalogConnection")!,
+        _ => config.GetConnectionString("CatalogConnection")!
+    };
+}
+
+static string GetServerNameFromConnectionString(string connectionString)
+{
+    try
+    {
+        var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
+        return builder.TryGetValue("Server", out var value) ? value.ToString()! : "Desconocido";
+    }
+    catch
+    {
+        return "Indeterminado";
+    }
+}
+
+static string GetDatabaseNameFromConnectionString(string connectionString)
+{
+    try
+    {
+        var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
+        return builder.TryGetValue("Database", out var value) ? value.ToString()! : "Desconocido";
+    }
+    catch
+    {
+        return "Indeterminado";
+    }
 }
