@@ -102,11 +102,12 @@ namespace User.Infrastructure
             IConfiguration configuration,
             ILogger logger)
         {
-            // 1. Configuración de UnitOfWork y repositorios
+                // 1. Configuración de UnitOfWork y repositorios
             services.AddScoped<IUnitOfWork>(provider =>
-                new UnitOfWork(
-                    provider.GetRequiredService<UserIdentityDbContext>(),
-                    provider.GetRequiredService<ILogger<UnitOfWork>>()));
+                 new UnitOfWork(
+                     provider.GetRequiredService<UserIdentityDbContext>(),
+                     provider.GetRequiredService<ILogger<UnitOfWork>>(),
+                     provider.GetRequiredService<IUserRepository>()));
 
             services.AddScoped<IUserRepository>(provider =>
                 new UserRepository(

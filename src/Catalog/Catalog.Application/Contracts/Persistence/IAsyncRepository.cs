@@ -5,25 +5,33 @@ namespace Catalog.Application.Contracts.Persistence
 {
     public interface IAsyncRepository<T> where T : BaseAuditableEntity
     {
-        Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate);
         Task<IReadOnlyList<T>> GetAsync();
-        Task<T> GetById(Guid id);
-        void AddEntity(T entity);
-        void AddRange(IEnumerable<T> entities);
-        Task BulkAddEntity(List<T> entity);
-        void UpdateEntity(T entity);
-        Task BulkUpdateEntity(List<T> list);
-        void DeleteEntity(T entity);
+        Task<T> GetByIdAsync(string id);
+        Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate);
+        Task<IReadOnlyList<T>> GetAsync(
+            Expression<Func<T, bool>> predicate = null,
+            Func<IQueryable<T>, IOrderedQueryable<T>> orderBy = null,
+            string includeString = null,
+            bool disableTracking = true);
+        Task<IReadOnlyList<T>> GetAsync(
+            Expression<Func<T, bool>> predicate = null,
+            Func<IQueryable<T>, IOrderedQueryable<T>> orderBy = null,
+            bool disableTracking = true,
+            params Expression<Func<T, object>>[] includes);
 
-        void DeleteRange(IEnumerable<T> entities);
-        Task BulkDeleteEntity(List<T> list);
-        Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate = null,
-                                       Func<IQueryable<T>, IOrderedQueryable<T>> orderBy = null,
-                                       string includeString = null,
-                                       bool disableTracking = true);
-        Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate = null,
-                                     Func<IQueryable<T>, IOrderedQueryable<T>> orderBy = null,
-                                     bool disableTracking = true,
-                                     params Expression<Func<T, object>>[] includes);
+        // Operaciones básicas (para UnitOfWork)
+        void Add(T entity);
+        void Update(T entity);
+        void Delete(T entity);
+
+        // Operaciones con guardado inmediato
+        Task AddAndSaveAsync(T entity);
+        Task UpdateAndSaveAsync(T entity);
+        Task DeleteAndSaveAsync(T entity);
+
+        // Operaciones masivas
+        Task BulkInsertAsync(List<T> entities);
+        Task BulkUpdateAsync(List<T> entities);
+        Task BulkDeleteAsync(List<T> entities);
     }
 }

@@ -37,7 +37,7 @@ namespace Catalog.Application.Features.Catalogs.Commands
                 };
 
                 category.ApplyAudit(UserId!, isNew: true);
-                _unitOfWork.CategoryRepository.AddEntity(category); 
+                _unitOfWork.CategoryRepository.Add(category); 
                 await _unitOfWork.Complete();
 
 

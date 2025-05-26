@@ -2,12 +2,16 @@
 using Catalog.Domain;
 using Catalog.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Polly.Retry;
 
 namespace Catalog.Infrastructure.Repositories
 {
     public class CategoryRepository: RepositoryBase<Category>, ICategoryRepository
     {
-        public CategoryRepository(CatalogDbContext context) : base(context)
+        public CategoryRepository(
+            CatalogDbContext context,
+            AsyncRetryPolicy retryPolicy
+            ) : base(context, retryPolicy)
         {
             
         }

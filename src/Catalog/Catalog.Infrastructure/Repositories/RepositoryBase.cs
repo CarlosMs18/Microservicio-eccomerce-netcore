@@ -4,103 +4,101 @@ using Catalog.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using EFCore.BulkExtensions;
 using System.Linq.Expressions;
+using Polly.Retry;
 
 namespace Catalog.Infrastructure.Repositories
 {
     public class RepositoryBase<T> : IAsyncRepository<T> where T : BaseAuditableEntity
     {
         protected readonly CatalogDbContext _context;
-        public RepositoryBase(CatalogDbContext context)
+        protected readonly AsyncRetryPolicy _retryPolicy;
+        public RepositoryBase(CatalogDbContext context, AsyncRetryPolicy retryPolicy)
         {
             _context = context;
+            _retryPolicy = retryPolicy;
         }
 
+        // ==================== OPERACIONES DE LECTURA (con retry) ====================
         public async Task<IReadOnlyList<T>> GetAsync()
+            => await _retryPolicy.ExecuteAsync(async () =>
+                await _context.Set<T>().AsNoTracking().ToListAsync());
+
+        public async Task<T> GetByIdAsync(string id)
+            => await _retryPolicy.ExecuteAsync(async () =>
+                await _context.Set<T>().FindAsync(id));
+
+        public async Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate)
+            => await _retryPolicy.ExecuteAsync(async () =>
+                await _context.Set<T>().Where(predicate).AsNoTracking().ToListAsync());
+
+        public async Task<IReadOnlyList<T>> GetAsync(
+            Expression<Func<T, bool>> predicate = null,
+            Func<IQueryable<T>, IOrderedQueryable<T>> orderBy = null,
+            string includeString = null,
+            bool disableTracking = true)
         {
-            return await _context.Set<T>().ToListAsync();
+            IQueryable<T> query = _context.Set<T>();
+            if (disableTracking) query = query.AsNoTracking();
+            if (!string.IsNullOrWhiteSpace(includeString)) query = query.Include(includeString);
+            if (predicate != null) query = query.Where(predicate);
+            return orderBy != null
+                ? await orderBy(query).ToListAsync()
+                : await query.ToListAsync();
         }
 
-        public void AddEntity(T entity)
+        public async Task<IReadOnlyList<T>> GetAsync(
+            Expression<Func<T, bool>> predicate = null,
+            Func<IQueryable<T>, IOrderedQueryable<T>> orderBy = null,
+            bool disableTracking = true,
+            params Expression<Func<T, object>>[] includes)
+        {
+            IQueryable<T> query = _context.Set<T>();
+            if (disableTracking) query = query.AsNoTracking();
+            if (includes != null)
+                query = includes.Aggregate(query, (current, include) => current.Include(include));
+            if (predicate != null) query = query.Where(predicate);
+            return orderBy != null
+                ? await orderBy(query).ToListAsync()
+                : await query.ToListAsync();
+        }
+
+        // ==================== OPERACIONES BÁSICAS (sin guardar) ====================
+        public void Add(T entity)
+            => _context.Set<T>().Add(entity);
+
+        public void Update(T entity)
+            => _context.Entry(entity).State = EntityState.Modified;
+
+        public void Delete(T entity)
+            => _context.Set<T>().Remove(entity);
+
+        // ==================== OPERACIONES CON GUARDADO ====================
+        public async Task AddAndSaveAsync(T entity)
         {
             _context.Set<T>().Add(entity);
+            await _context.SaveChangesAsync();
         }
 
-        public void AddRange(IEnumerable<T> entities)
+        public async Task UpdateAndSaveAsync(T entity)
         {
-            _context.Set<T>().AddRange(entities);
-        }
-        public void UpdateEntity(T entity)
-        {
-            //_context.Set<T>().Attach(entity);
-            _context.Set<T>().Update(entity);
+            _context.Entry(entity).State = EntityState.Modified;
+            await _context.SaveChangesAsync();
         }
 
-        public void DeleteRange(IEnumerable<T> entities)
-        {
-            _context.Set<T>().RemoveRange(entities);
-        }
-        public void DeleteEntity(T entity)
+        public async Task DeleteAndSaveAsync(T entity)
         {
             _context.Set<T>().Remove(entity);
-        }
-        public async Task<T> GetById(Guid id)
-        {
-            return await _context.Set<T>().FindAsync(id);
-        }
-        public async Task BulkUpdateEntity(List<T> list)
-        {
-            await _context.BulkUpdateAsync(list);
-        }
-        public async Task BulkAddEntity(List<T> entity)
-        {
-            await _context.BulkInsertAsync(entity);
-        }
-        public async Task BulkDeleteEntity(List<T> list)
-        {
-            await _context.BulkDeleteAsync(list);
-        }
-        public async Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate)
-        {
-            return await _context.Set<T>().Where(predicate).ToListAsync();
+            await _context.SaveChangesAsync();
         }
 
-        public async Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate = null,
-                                       Func<IQueryable<T>, IOrderedQueryable<T>> orderBy = null,
-                                       string includeString = null,
-                                       bool disableTracking = true)
-        {
-            IQueryable<T> query = _context.Set<T>();
-            if (disableTracking) query = query.AsNoTracking();
+        // ==================== OPERACIONES MASIVAS ====================
+        public async Task BulkInsertAsync(List<T> entities)
+            => await _context.BulkInsertAsync(entities);
 
-            if (!string.IsNullOrWhiteSpace(includeString)) query = query.Include(includeString);
+        public async Task BulkUpdateAsync(List<T> entities)
+            => await _context.BulkUpdateAsync(entities);
 
-            if (predicate != null) query = query.Where(predicate);
-
-            if (orderBy != null)
-                return await orderBy(query).ToListAsync();
-
-
-            return await query.ToListAsync();
-        }
-
-        public async Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate = null,
-                                     Func<IQueryable<T>, IOrderedQueryable<T>> orderBy = null,
-                                     bool disableTracking = true,
-                                     params Expression<Func<T, object>>[] includes)
-        {
-
-            IQueryable<T> query = _context.Set<T>();
-            if (disableTracking) query = query.AsNoTracking();
-
-            if (includes != null) query = includes.Aggregate(query, (current, include) => current.Include(include));
-
-            if (predicate != null) query = query.Where(predicate);
-
-            if (orderBy != null)
-                return await orderBy(query).ToListAsync();
-
-
-            return await query.ToListAsync();
-        }
+        public async Task BulkDeleteAsync(List<T> entities)
+            => await _context.BulkDeleteAsync(entities);
     }
 }

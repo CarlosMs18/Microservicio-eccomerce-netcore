@@ -1,36 +1,44 @@
 ﻿using Catalog.Application.Contracts.Persistence;
 using Catalog.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using System.Collections;
 using Catalog.Domain.Common;
 
 namespace Catalog.Infrastructure.Repositories
 {
-    public class UnitOfWork : IUnitOfWork
+    public class UnitOfWork : IUnitOfWork, IDisposable
     {
-        private Hashtable _repositories;
         private readonly CatalogDbContext _context;
-        private IDbContextTransaction transaction;
-        public ICategoryRepository categoryRepository;
-        public UnitOfWork(CatalogDbContext context)
+        private readonly ILogger<UnitOfWork> _logger;
+        private readonly ICategoryRepository _categoryRepository;
+        private Hashtable _repositories;
+        private IDbContextTransaction _transaction;
+
+        public UnitOfWork(
+            CatalogDbContext context,
+            ILogger<UnitOfWork> logger,
+            ICategoryRepository categoryRepository) // Inyección directa
         {
             _context = context;
-
+            _logger = logger;
+            _categoryRepository = categoryRepository;
+            _repositories = new Hashtable();
         }
 
-        public CatalogDbContext catalogDbContext => _context;
-        public ICategoryRepository CategoryRepository => categoryRepository ??= new CategoryRepository(_context);
-     
+        public CatalogDbContext CatalogDbContext => _context;
+        public ICategoryRepository CategoryRepository => _categoryRepository; // Usa la instancia inyectada
 
         public async Task BeginTransaction()
         {
-            transaction = await _context.Database.BeginTransactionAsync();
+            _transaction = await _context.Database.BeginTransactionAsync();
         }
 
         public async Task Commit()
         {
-            await transaction.CommitAsync();
+            if (_transaction == null) throw new InvalidOperationException("No hay transacción activa");
+            await _transaction.CommitAsync();
         }
 
         public async Task<int> Complete()
@@ -41,38 +49,23 @@ namespace Catalog.Infrastructure.Repositories
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
-                Console.WriteLine(ex.Message);
-                throw new Exception("Error en UnitOfWork: " + ex.InnerException?.Message, ex);
-                throw new Exception(ex.Message);
+                _logger.LogError(ex, "Error al guardar cambios");
+                throw;
             }
-        }
-
-
-        public void Dispose()
-        {
-            transaction?.Dispose();
-            _context.Dispose();
-        }
-
-        public async Task<int> ExecStoreProcedure(string sql, params object[] parameters)
-        {
-            return await _context.Database.ExecuteSqlRawAsync(sql, parameters);
         }
 
         public IAsyncRepository<TEntity> Repository<TEntity>() where TEntity : BaseAuditableEntity
         {
-            if (_repositories == null)
-            {
-                _repositories = new Hashtable();
-            }
+            if (_repositories == null) _repositories = new Hashtable();
 
             var type = typeof(TEntity).Name;
 
             if (!_repositories.ContainsKey(type))
             {
-                var repositoryType = typeof(RepositoryBase<>);
-                var repositoryInstance = Activator.CreateInstance(repositoryType.MakeGenericType(typeof(TEntity)), _context);
+                var repositoryInstance = Activator.CreateInstance(
+                    typeof(RepositoryBase<>).MakeGenericType(typeof(TEntity)),
+                    _context);
+
                 _repositories.Add(type, repositoryInstance);
             }
 
@@ -81,7 +74,19 @@ namespace Catalog.Infrastructure.Repositories
 
         public async Task Rollback()
         {
-            await transaction.RollbackAsync();
+            if (_transaction != null) await _transaction.RollbackAsync();
+        }
+
+        public void Dispose()
+        {
+            _transaction?.Dispose();
+            _context?.Dispose();
+            GC.SuppressFinalize(this);
+        }
+
+        public async Task<int> ExecStoreProcedure(string sql, params object[] parameters)
+        {
+            return await _context.Database.ExecuteSqlRawAsync(sql, parameters);
         }
     }
 }

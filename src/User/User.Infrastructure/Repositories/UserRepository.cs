@@ -9,13 +9,13 @@ namespace User.Infrastructure.Repositories
 {
     public class UserRepository : RepositoryBase<ApplicationUser>, IUserRepository
     {
+        
         public UserRepository(
             UserIdentityDbContext identityDbContext,
             AsyncRetryPolicy retryPolicy)
             : base(identityDbContext, retryPolicy) // Base ya maneja el contexto y el retryPolicy
         {
-            // No necesitas redeclarar _retryPolicy ni _identityDbContext
-            // (ya están en RepositoryBase)
+          
         }
 
         public async Task<ApplicationUser> GetByEmailWithRolesAsync(string email, bool trackChanges = false)

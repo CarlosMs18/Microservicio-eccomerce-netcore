@@ -31,13 +31,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\Shared.Infrastructure\Shared.Infrastructure.csproj" />
     <ProjectReference Include="..\Catalog.Application\Catalog.Application.csproj" />
   </ItemGroup>
 
 	<ItemGroup>
-		<Protobuf
-		  Include="..\..\User\User.Infrastructure\Protos\auth.proto"
-		  GrpcServices="Client"
-		  ProtoRoot="..\..\User\User.Infrastructure\Protos\" />
+		<Protobuf Include="..\..\User\User.Infrastructure\Protos\auth.proto" GrpcServices="Client" ProtoRoot="..\..\User\User.Infrastructure\Protos\" />
 	</ItemGroup>
 </Project>
