@@ -1,62 +1,50 @@
-﻿// SyncDataServices/Grpc/UserGrpcClient.cs
-using Grpc.Core;
-using Grpc.Net.Client;
-using Microsoft.Extensions.Configuration;
-using User.Auth; 
+﻿using Grpc.Core;
+using Microsoft.Extensions.Logging;
+using User.Auth;
 
 namespace Catalog.Infrastructure.SyncDataServices.Grpc
 {
-    public class UserGrpcClient : IDisposable // Implementa IDisposable para liberar recursos
+    public interface IUserGrpcClient
     {
-        private readonly GrpcChannel _channel;
-        private readonly AuthService.AuthServiceClient _client; // Corregido: AuthService.AuthClient
+        Task<TokenValidationResponse> ValidateTokenAsync(string token);
+    }
 
-        public UserGrpcClient(IConfiguration config)
+    public class UserGrpcClient : IUserGrpcClient
+    {
+        private readonly AuthService.AuthServiceClient _client;
+        private readonly ILogger<UserGrpcClient> _logger;
+
+        public UserGrpcClient(
+            AuthService.AuthServiceClient client,
+            ILogger<UserGrpcClient> logger)
         {
-            // Configuración robusta del canal
-            _channel = GrpcChannel.ForAddress(
-                config["Grpc:UserUrl"] ?? throw new ArgumentNullException("Grpc:UserUrl no configurado"),
-                new GrpcChannelOptions
-                {
-                    HttpHandler = new SocketsHttpHandler
-                    {
-                        PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
-                        KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-                        KeepAlivePingTimeout = TimeSpan.FromSeconds(30)
-                    }
-                });
-
-            _client = new AuthService.AuthServiceClient(_channel); // Servicio: AuthService (no Auth)
+            _client = client;
+            _logger = logger;
         }
 
         public async Task<TokenValidationResponse> ValidateTokenAsync(string token)
         {
-            Console.WriteLine("[UserGrpcClient] Validando token...");
+            _logger.LogDebug("Validando token via gRPC...");
+
             try
             {
                 var response = await _client.ValidateTokenAsync(
                     new TokenRequest { Token = token },
                     deadline: DateTime.UtcNow.AddSeconds(5));
 
-                Console.WriteLine($"[UserGrpcClient] Respuesta válida: {response.IsValid}");
+                _logger.LogInformation("Token validado para usuario: {UserId}", response.UserId);
                 return response;
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
             {
-                Console.WriteLine("[UserGrpcClient] Timeout: Servidor gRPC no respondió");
-                throw new TimeoutException("Timeout al validar el token", ex);
+                _logger.LogWarning("Timeout al validar token");
+                throw new TimeoutException("Servicio de autenticación no respondió", ex);
             }
             catch (RpcException ex)
             {
-                Console.WriteLine($"[UserGrpcClient] Error gRPC: {ex.Status.Detail}");
-                throw new Exception($"Error gRPC: {ex.Status.Detail}");
+                _logger.LogError(ex, "Error gRPC al validar token");
+                throw new Exception($"Error de autenticación: {ex.Status.Detail}");
             }
-        }
-
-        public void Dispose()
-        {
-            _channel?.Dispose();
-            GC.SuppressFinalize(this);
         }
     }
 }

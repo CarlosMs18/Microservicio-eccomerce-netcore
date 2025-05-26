@@ -1,94 +1,100 @@
 ﻿using Grpc.Core;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using System.Security.Claims;
-using System.Threading.Tasks;
-using Catalog.Infrastructure.SyncDataServices.Grpc; // 👈 Añade este namespace
+using Catalog.Infrastructure.SyncDataServices.Grpc;
 
-public class TokenGrpcValidationMiddleware
+namespace Catalog.WebAPI.Middlewares
 {
-    private readonly RequestDelegate _next;
-    private readonly UserGrpcClient _grpcClient; // 👈 Usa tu clase personalizada
-    private static readonly Dictionary<string, HashSet<string>> _publicRoutes = new()
+    public class TokenGrpcValidationMiddleware
     {
-        ["/api/category"] = new HashSet<string> { "GET" }
-    };
-
-    // Inyecta UserGrpcClient en lugar de AuthService.AuthServiceClient
-    public TokenGrpcValidationMiddleware(RequestDelegate next, UserGrpcClient grpcClient)
-    {
-        _next = next;
-        _grpcClient = grpcClient; // 👈 Asigna el cliente
-    }
-
-    public async Task InvokeAsync(HttpContext context)
-    {
-        var path = context.Request.Path.Value?.ToLowerInvariant();
-        var method = context.Request.Method;
-
-        if (IsPublicRoute(method, path))
+        private readonly RequestDelegate _next;
+        private readonly IUserGrpcClient _grpcClient;
+        private readonly ILogger<TokenGrpcValidationMiddleware> _logger;
+        private static readonly Dictionary<string, HashSet<string>> _publicRoutes = new()
         {
-            await _next(context);
-            return;
+            ["/api/category"] = new HashSet<string> { "GET" },
+            ["/health"] = new HashSet<string> { "GET" }
+        };
+
+        public TokenGrpcValidationMiddleware(
+            RequestDelegate next,
+            IUserGrpcClient grpcClient,
+            ILogger<TokenGrpcValidationMiddleware> logger)
+        {
+            _next = next;
+            _grpcClient = grpcClient;
+            _logger = logger;
         }
 
-        var authHeader = context.Request.Headers["Authorization"].ToString();
-
-        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
+        public async Task InvokeAsync(HttpContext context)
         {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            await context.Response.WriteAsync("Token requerido");
-            return;
-        }
+            var path = context.Request.Path.Value?.ToLowerInvariant();
+            var method = context.Request.Method;
 
-        var token = authHeader["Bearer ".Length..].Trim();
-        Console.WriteLine($"[gRPC Middleware] Token recibido: {token}");
-
-        try
-        {
-            // 👇 Usa tu UserGrpcClient en lugar del cliente autogenerado
-            var response = await _grpcClient.ValidateTokenAsync(token);
-
-            if (!response.IsValid)
+            if (IsPublicRoute(method, path))
             {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsync("Token inválido o expirado");
+                await _next(context);
                 return;
             }
 
-            var claims = new List<Claim>
+            var authHeader = context.Request.Headers["Authorization"].ToString();
+
+            if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
             {
-                new Claim("uid", response.UserId),
-                new Claim(ClaimTypes.Email, response.Email)
-            };
-            claims.AddRange(response.Roles.Select(role => new Claim(ClaimTypes.Role, role)));
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsync("Token requerido");
+                return;
+            }
 
-            context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Bearer"));
-            await _next(context);
-        }
-        catch (TimeoutException)
-        {
-            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-            await context.Response.WriteAsync("Servicio de autenticación no disponible");
-        }
-        catch (Exception ex)
-        {
-            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-            await context.Response.WriteAsync($"Error validando token: {ex.Message}");
-        }
-    }
+            var token = authHeader["Bearer ".Length..].Trim();
+            _logger.LogDebug("Validando token para ruta: {Path}", path);
 
-    private bool IsPublicRoute(string method, string path)
-    {
-        if (method == "OPTIONS") return true;
-        if (string.IsNullOrEmpty(path)) return false;
+            try
+            {
+                var response = await _grpcClient.ValidateTokenAsync(token);
 
-        foreach (var route in _publicRoutes)
-        {
-            if (path.StartsWith(route.Key) && route.Value.Contains(method))
-                return true;
+                if (!response.IsValid)
+                {
+                    _logger.LogWarning("Token inválido para ruta: {Path}", path);
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    await context.Response.WriteAsync("Token inválido o expirado");
+                    return;
+                }
+
+                var claims = new List<Claim>
+                {
+                    new Claim("uid", response.UserId),
+                    new Claim(ClaimTypes.Email, response.Email)
+                };
+                claims.AddRange(response.Roles.Select(role => new Claim(ClaimTypes.Role, role)));
+
+                context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Bearer"));
+                _logger.LogInformation("Acceso autorizado para usuario: {UserId}", response.UserId);
+                await _next(context);
+            }
+            catch (TimeoutException)
+            {
+                _logger.LogError("Servicio de autenticación no disponible");
+                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                await context.Response.WriteAsync("Servicio de autenticación no disponible");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validando token");
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                await context.Response.WriteAsync($"Error validando token: {ex.Message}");
+            }
         }
-        return false;
+
+        private bool IsPublicRoute(string method, string path)
+        {
+            if (method == "OPTIONS") return true;
+            if (string.IsNullOrEmpty(path)) return false;
+
+            return _publicRoutes.Any(route =>
+                path.StartsWith(route.Key) &&
+                route.Value.Contains(method));
+        }
     }
 }
-
-

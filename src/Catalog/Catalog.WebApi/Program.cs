@@ -1,4 +1,4 @@
-using Catalog.Application;
+    using Catalog.Application;
 using Catalog.Infrastructure;
 using Catalog.Infrastructure.Persistence;
 using Catalog.Infrastructure.Resilience;
@@ -6,6 +6,7 @@ using Catalog.Infrastructure.SyncDataServices.Grpc;
 using Catalog.Infrastructure.SyncDataServices.Http;
 using Catalog.WebAPI.Middlewares;
 using Grpc.Core;
+using Grpc.Net.Client;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Polly;
@@ -56,34 +57,39 @@ try
     .AddPolicyHandler(HttpClientPolicies.GetCircuitBreakerPolicy(builder.Configuration));
 
     // Configuración gRPC Client
-    var grpcUrl = builder.Configuration["Grpc:UserUrl"];
+    var grpcUrl = builder.Configuration["Grpc:UserUrl"]!;
     logger.LogDebug("Configurando gRPC Client para: {GrpcUrl}", grpcUrl);
 
     builder.Services.AddGrpcClient<AuthService.AuthServiceClient>(options =>
     {
         options.Address = new Uri(grpcUrl);
     })
-    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+.ConfigureChannel(o =>
+{
+    o.HttpHandler = new SocketsHttpHandler
     {
         PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
         KeepAlivePingDelay = TimeSpan.FromSeconds(60),
         KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
         EnableMultipleHttp2Connections = true
-    })
-    .AddPolicyHandler(Policy<HttpResponseMessage>
-        .Handle<RpcException>(e => e.StatusCode == StatusCode.Unavailable)
-        .WaitAndRetryAsync(
-            3,
-            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-            onRetry: (exception, delay, retryCount, context) =>
-            {
-                logger.LogWarning("Intento #{RetryCount} fallido. Reintentando en {Delay}ms...",
-                    retryCount, delay.TotalMilliseconds);
-            }
-        )
-    );
+    };
+})
+.AddPolicyHandler(Policy<HttpResponseMessage>
+    .Handle<RpcException>(e =>
+        e.StatusCode == StatusCode.Unavailable ||
+        e.StatusCode == StatusCode.DeadlineExceeded)
+    .WaitAndRetryAsync(3, retryAttempt =>
+        TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
 
-    builder.Services.AddSingleton<UserGrpcClient>();
+    builder.Services.AddSingleton<IUserGrpcClient, UserGrpcClient>();
+
+    builder.Services.AddSingleton(provider =>
+        GrpcChannel.ForAddress(
+            grpcUrl,
+            new GrpcChannelOptions
+            {
+                HttpHandler = provider.GetRequiredService<SocketsHttpHandler>()
+            }));
 
     // Configuración de la base de datos
     var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
@@ -150,8 +156,8 @@ try
     // Middleware pipeline
     app.UseHttpsRedirection();
     app.UseRouting();
-    app.UseMiddleware<TokenGrpcValidationMiddleware>();
-    //app.UseMiddleware<TokenValidationMiddleware>();
+   // app.UseMiddleware<TokenGrpcValidationMiddleware>();
+   app.UseMiddleware<TokenValidationMiddleware>();
    
     app.UseAuthorization();
     app.MapControllers();
