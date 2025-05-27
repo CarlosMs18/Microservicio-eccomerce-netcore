@@ -14,6 +14,7 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
 using Shared.Core.Interfaces;
+using System;
 using System.Net.Http.Headers;
 using User.Auth;
 
@@ -28,6 +29,8 @@ try
     Log.Information("🚀 Iniciando Catalog Service");
 
     var builder = WebApplication.CreateBuilder(args);
+    var restPort = builder.Configuration.GetValue<int>("RestPort");
+    var userServiceUrl = builder.Configuration["UserMicroservice:BaseUrl"];
 
     // Detect environment
     var environment = DetectEnvironment();
@@ -97,9 +100,18 @@ try
 
     // Obtener cadena de conexión en base al entorno
     var connectionString = GetConnectionString(builder.Configuration, environment);
-    Log.Information("🗃️ DB para {Environment}: {Database} en {Server}", environment,
-        GetDatabaseNameFromConnectionString(connectionString),
-        GetServerNameFromConnectionString(connectionString));
+
+
+
+    Log.Information("🌐 Endpoints configurados:");
+    Log.Information("  REST: http://localhost:{Port}/api/v1/", restPort);
+    Log.Information("  User Service HTTP: {UserHttpUrl}", userServiceUrl);
+    Log.Information("  User Service gRPC: {UserGrpcUrl}", grpcUrl);
+
+    Log.Information("🗃️ DB para {Environment}: {Database} en {Server}",
+        environment,
+        DbConnectionHelper.GetDatabaseName(connectionString),
+        DbConnectionHelper.GetServerName(connectionString));
 
     // Agregar servicios
     builder.Services.AddControllers();
@@ -117,7 +129,7 @@ try
     }
 
     // Configuración de Kestrel
-    var restPort = builder.Configuration.GetValue<int>("RestPort");
+   
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(restPort, listenOptions =>
@@ -147,7 +159,9 @@ try
 
     app.UseHttpsRedirection();
     app.UseRouting();
-    app.UseMiddleware<TokenValidationMiddleware>();
+   
+    app.UseMiddleware<TokenGrpcValidationMiddleware>();
+    //app.UseMiddleware<TokenValidationMiddleware>();
     app.UseAuthorization();
     app.MapControllers();
     app.UseMiddleware<ExceptionMiddleware>();
@@ -173,6 +187,10 @@ try
     }
 
     Log.Information("✅ Catalog Service listo y ejecutándose");
+
+
+
+
     await app.RunAsync();
 }
 catch (Exception ex)
@@ -196,6 +214,8 @@ static string DetectEnvironment()
     return "Local";
 }
 
+
+
 static string GetConnectionString(IConfiguration config, string environment)
 {
     var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
@@ -210,28 +230,4 @@ static string GetConnectionString(IConfiguration config, string environment)
     };
 }
 
-static string GetServerNameFromConnectionString(string connectionString)
-{
-    try
-    {
-        var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
-        return builder.TryGetValue("Server", out var value) ? value.ToString()! : "Desconocido";
-    }
-    catch
-    {
-        return "Indeterminado";
-    }
-}
 
-static string GetDatabaseNameFromConnectionString(string connectionString)
-{
-    try
-    {
-        var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
-        return builder.TryGetValue("Database", out var value) ? value.ToString()! : "Desconocido";
-    }
-    catch
-    {
-        return "Indeterminado";
-    }
-}

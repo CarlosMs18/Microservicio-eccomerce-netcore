@@ -208,7 +208,7 @@ void ConfigurePipeline(WebApplication app, dynamic environmentInfo, ILogger logg
     app.UseRouting();
     app.UseAuthorization();
     app.MapControllers();
-    app.UseMiddleware<ExceptionMiddleware>();
+    
 
     // Health Check mejorado
     app.MapHealthChecks("/health", new HealthCheckOptions
