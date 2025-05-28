@@ -16,7 +16,7 @@ namespace Catalog.Infrastructure
         public static IServiceCollection AddInfrastructureServices(
             this IServiceCollection services,
             IConfiguration configuration,
-            string environment) // ← Recibimos environment como parámetro
+            string environment)
         {
             // 1. Configuración de la base de datos
             ConfigureDatabase(services, configuration, environment);
@@ -45,12 +45,12 @@ namespace Catalog.Infrastructure
                 {
                     sqlOptions.MigrationsAssembly(typeof(CatalogDbContext).Assembly.FullName);
                     sqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 5,
-                    maxRetryDelay: TimeSpan.FromSeconds(30),
-                    errorNumbersToAdd: null);
+                        maxRetryCount: 5,
+                        maxRetryDelay: TimeSpan.FromSeconds(30),
+                        errorNumbersToAdd: null);
                 });
 
-                if (environment == "Local")
+                if (environment == "Development")
                 {
                     options.EnableDetailedErrors();
                     options.EnableSensitiveDataLogging();
@@ -59,23 +59,79 @@ namespace Catalog.Infrastructure
             });
         }
 
-        private static string GetConnectionString(
-            IConfiguration configuration,
-            string environment)
+        private static string GetConnectionString(IConfiguration configuration, string environment)
         {
-            var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
-
-            return environment switch
+            try
             {
-                "Kubernetes" => string.Format(
-                    configuration.GetConnectionString("KubernetesConnection") ??
-                    configuration.GetConnectionString("CatalogConnection")!,
-                    dbPassword ?? throw new ArgumentNullException(nameof(dbPassword),
-                    "DB_PASSWORD requerido en Kubernetes")),
-                "Docker" => configuration.GetConnectionString("DockerConnection") ??
-                            configuration.GetConnectionString("CatalogConnection")!,
-                _ => configuration.GetConnectionString("CatalogConnection")!
-            };
+                var connectionParams = configuration.GetSection("ConnectionParameters");
+                var templates = configuration.GetSection("ConnectionTemplates");
+
+                string template;
+                var parameters = new Dictionary<string, string>();
+
+                switch (environment)
+                {
+                    case "Development":
+                        // Para Development - usar LocalDB con Trusted Connection
+                        template = templates["Local"] ?? throw new InvalidOperationException("Template Local no encontrado");
+                        parameters = new Dictionary<string, string>
+                        {
+                            ["server"] = connectionParams["server"] ?? "(localdb)\\mssqllocaldb",
+                            ["database"] = configuration["Catalog:DatabaseName"] ?? "CatalogDB_Dev",
+                            ["trusted"] = connectionParams["trusted"] ?? "true"
+                        };
+                        break;
+
+                    case "Docker":
+                        // Para Docker - usar SQL Server con usuario/password
+                        template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
+                        parameters = new Dictionary<string, string>
+                        {
+                            ["server"] = connectionParams["server"] ?? "host.docker.internal,1433",
+                            ["database"] = configuration["Catalog:DatabaseName"] ?? "CatalogDB_Dev",
+                            ["user"] = connectionParams["user"] ?? "sa",
+                            ["password"] = connectionParams["password"] ?? throw new InvalidOperationException("Password requerido para Docker"),
+                            ["trust"] = connectionParams["trust"] ?? "true"
+                        };
+                        break;
+
+                    case "Kubernetes":
+                        // Para Kubernetes - usar SA authentication con variable de entorno
+                        template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
+                        var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+                        if (string.IsNullOrEmpty(dbPassword))
+                        {
+                            throw new InvalidOperationException("Variable de entorno DB_PASSWORD no encontrada para Kubernetes");
+                        }
+
+                        parameters = new Dictionary<string, string>
+                        {
+                            ["server"] = connectionParams["server"] ?? throw new InvalidOperationException("Server no configurado para Kubernetes"),
+                            ["database"] = configuration["Catalog:DatabaseName"] ?? "CatalogDB_Dev",
+                            ["user"] = connectionParams["user"] ?? "sa",
+                            ["password"] = dbPassword,
+                            ["trust"] = connectionParams["trust"] ?? "true"
+                        };
+                        break;
+
+                    default:
+                        throw new InvalidOperationException($"Entorno '{environment}' no soportado");
+                }
+
+                var connectionString = parameters.Aggregate(template, (current, param) =>
+                    current.Replace($"{{{param.Key}}}", param.Value));
+
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    throw new InvalidOperationException("Cadena de conexión no puede estar vacía");
+                }
+
+                return connectionString;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error al construir connection string para {environment}: {ex.Message}", ex);
+            }
         }
 
         private static void RegisterRepositories(IServiceCollection services)

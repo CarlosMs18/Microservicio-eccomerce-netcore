@@ -29,97 +29,89 @@ try
     Log.Information("🚀 Iniciando Catalog Service");
 
     var builder = WebApplication.CreateBuilder(args);
-    var restPort = builder.Configuration.GetValue<int>("RestPort");
-    var userServiceUrl = builder.Configuration["UserMicroservice:BaseUrl"];
 
-    // Detect environment
+    // 1. Detección de entorno
     var environment = DetectEnvironment();
     Log.Information("🔧 Entorno detectado: {Environment}", environment);
 
-    // Load configuration
+    // 2. Carga de configuración
     builder.Configuration
         .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-        .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+        .AddJsonFile($"appsettings.{environment}.json", optional: true)
         .AddEnvironmentVariables();
 
-    // Configure Serilog
-    // Configuración óptima para producción
+    // 3. Configuración de Serilog
     builder.Host.UseSerilog((ctx, services, config) =>
     {
         config.MinimumLevel.Information()
               .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
               .MinimumLevel.Override("System", LogEventLevel.Warning)
               .Enrich.FromLogContext()
-              .WriteTo.Async(a => a.Console()) // ← ¡Importante para performance!
+              .WriteTo.Async(a => a.Console())
               .WriteTo.Async(a => a.File(
                   new CompactJsonFormatter(),
-                  "logs/log-.json",
+                  $"logs/{environment.ToLower()}-log-.json",
                   rollingInterval: RollingInterval.Day,
-                  retainedFileCountLimit: 15,
-                  buffered: true)); // ← Buffering para mejor performance
+                  retainedFileCountLimit: 15));
     });
 
-    // Configure HttpClient para servicio externo
+    // 4. Configuración de puertos
+    var portsConfig = builder.Configuration.GetSection("Ports");
+    var restPort = portsConfig.GetValue<int>("Rest", 7204);
+    var grpcPort = portsConfig.GetValue<int>("Grpc", 5003);
+
+    // 5. Configuración de HttpClient
+    var microservicesConfig = builder.Configuration.GetSection("Microservices:User");
+    var serviceParams = builder.Configuration.GetSection("ServiceParameters");
+
+    var httpTemplate = microservicesConfig["HttpTemplate"] ?? "http://{host}/api/User/";
+    var host = serviceParams["host"] ?? "localhost";
+
+    var userServiceBaseUrl = httpTemplate.Replace("{host}", host);
+
     builder.Services.AddHttpClient<IExternalAuthService, UserHttpService>(client =>
     {
-        var baseUrl = builder.Configuration["UserMicroservice:BaseUrl"];
-        var timeout = builder.Configuration.GetValue<int>("UserMicroservice:TimeoutSeconds");
-
-        client.BaseAddress = new Uri(baseUrl);
-        client.DefaultRequestHeaders.Accept.Clear();
+        client.BaseAddress = new Uri(userServiceBaseUrl);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        client.Timeout = TimeSpan.FromSeconds(timeout);
+        client.Timeout = TimeSpan.FromSeconds(10);
     })
     .AddPolicyHandler(HttpClientPolicies.GetRetryPolicy(builder.Configuration))
     .AddPolicyHandler(HttpClientPolicies.GetCircuitBreakerPolicy(builder.Configuration));
 
-    // Configurar gRPC Client
-    var grpcUrl = builder.Configuration["Grpc:UserUrl"]!;
+    // 6. Configuración gRPC
+    var grpcTemplate = microservicesConfig["GrpcTemplate"] ?? "http://{host}:{port}";
+    var grpcHost = serviceParams["host"] ?? "localhost";
+    var servicePort = serviceParams["port"] ?? "5001";
+
+    var grpcUrl = grpcTemplate
+        .Replace("{host}", grpcHost)
+        .Replace("{port}", servicePort);
+
     builder.Services.AddGrpcClient<AuthService.AuthServiceClient>(options =>
     {
         options.Address = new Uri(grpcUrl);
     })
-    .ConfigureChannel(o =>
+    .ConfigureChannel(o => o.HttpHandler = new SocketsHttpHandler
     {
-        o.HttpHandler = new SocketsHttpHandler
-        {
-            PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
-            KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-            KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
-            EnableMultipleHttp2Connections = true
-        };
+        PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
+        KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+        KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+        EnableMultipleHttp2Connections = true
     })
     .AddPolicyHandler(Policy<HttpResponseMessage>
-        .Handle<RpcException>(e =>
-            e.StatusCode == StatusCode.Unavailable ||
-            e.StatusCode == StatusCode.DeadlineExceeded)
-        .WaitAndRetryAsync(3, retryAttempt =>
-            TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
+        .Handle<RpcException>(e => e.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
+        .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
 
     builder.Services.AddSingleton<IUserGrpcClient, UserGrpcClient>();
 
-    // Obtener cadena de conexión en base al entorno
-    var connectionString = GetConnectionString(builder.Configuration, environment);
-
-
-
-    Log.Information("🌐 Endpoints configurados:");
-    Log.Information("  REST: http://localhost:{Port}/api/v1/", restPort);
-    Log.Information("  User Service HTTP: {UserHttpUrl}", userServiceUrl);
-    Log.Information("  User Service gRPC: {UserGrpcUrl}", grpcUrl);
-
-    Log.Information("🗃️ DB para {Environment}: {Database} en {Server}",
-        environment,
-        DbConnectionHelper.GetDatabaseName(connectionString),
-        DbConnectionHelper.GetServerName(connectionString));
-
-    // Agregar servicios
+    // 7. Registro de servicios (sin lógica de BD aquí)
     builder.Services.AddControllers();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration, environment);
 
-    if (environment == "Local")
+    // 8. Configuración de Swagger solo para desarrollo
+    if (environment == "Development")
     {
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
@@ -128,8 +120,7 @@ try
         });
     }
 
-    // Configuración de Kestrel
-   
+    // 9. Configuración de Kestrel
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(restPort, listenOptions =>
@@ -137,12 +128,21 @@ try
             listenOptions.Protocols = HttpProtocols.Http1;
             Log.Debug("🌐 HTTP configurado en puerto {Port}", restPort);
         });
+
+        if (environment == "Development")
+        {
+            options.ListenAnyIP(grpcPort, listenOptions =>
+            {
+                listenOptions.Protocols = HttpProtocols.Http2;
+                Log.Debug("🔄 gRPC configurado en puerto {Port}", grpcPort);
+            });
+        }
     });
 
     var app = builder.Build();
 
-    // Middleware
-    if (environment == "Local")
+    // 10. Middleware pipeline
+    if (environment == "Development")
     {
         app.UseSwagger();
         app.UseSwaggerUI(c =>
@@ -159,16 +159,14 @@ try
 
     app.UseHttpsRedirection();
     app.UseRouting();
-   
     app.UseMiddleware<TokenGrpcValidationMiddleware>();
-    //app.UseMiddleware<TokenValidationMiddleware>();
     app.UseAuthorization();
     app.MapControllers();
     app.UseMiddleware<ExceptionMiddleware>();
     app.UseSerilogRequestLogging();
 
-    // Migraciones de BD
-    if (environment is "Local" or "Docker")
+    // 11. Migraciones de BD
+    if (environment is "Development" or "Docker")
     {
         using var scope = app.Services.CreateScope();
         var services = scope.ServiceProvider;
@@ -186,11 +184,10 @@ try
         }
     }
 
+    // 12. Log de endpoints configurados
+    LogEndpointsConfiguration(builder.Configuration, environment, restPort, userServiceBaseUrl, grpcUrl);
+
     Log.Information("✅ Catalog Service listo y ejecutándose");
-
-
-
-
     await app.RunAsync();
 }
 catch (Exception ex)
@@ -203,31 +200,34 @@ finally
     Log.CloseAndFlush();
 }
 
-// ========== MÉTODOS AUXILIARES ==========
-
 static string DetectEnvironment()
 {
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
         return "Kubernetes";
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
         return "Docker";
-    return "Local";
+    return "Development";
 }
 
-
-
-static string GetConnectionString(IConfiguration config, string environment)
+static void LogEndpointsConfiguration(IConfiguration config, string environment, int restPort, string userServiceBaseUrl, string grpcUrl)
 {
-    var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
-
-    return environment switch
+    try
     {
-        "Kubernetes" => string.Format(
-            config.GetConnectionString("KubernetesConnection") ?? config.GetConnectionString("CatalogConnection")!,
-            dbPassword ?? throw new ArgumentNullException(nameof(dbPassword), "DB_PASSWORD requerido en Kubernetes")),
-        "Docker" => config.GetConnectionString("DockerConnection") ?? config.GetConnectionString("CatalogConnection")!,
-        _ => config.GetConnectionString("CatalogConnection")!
-    };
+        // Log de configuración de BD
+        var connectionParams = config.GetSection("ConnectionParameters");
+        var databaseName = config["Catalog:DatabaseName"] ?? "CatalogDB_Dev";
+        var serverName = connectionParams["server"] ?? "Unknown";
+
+        Log.Information("🗃️ DB para {Environment}: {Database} en {Server}", environment, databaseName, serverName);
+
+        // Log de endpoints
+        Log.Information("🌐 Endpoints configurados:");
+        Log.Information("  REST: http://localhost:{Port}/api/v1/", restPort);
+        Log.Information("  User Service HTTP: {UserHttpUrl}", userServiceBaseUrl);
+        Log.Information("  User Service gRPC: {UserGrpcUrl}", grpcUrl);
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Error al mostrar configuración de endpoints");
+    }
 }
-
-
