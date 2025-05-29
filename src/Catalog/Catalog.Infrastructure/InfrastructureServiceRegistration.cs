@@ -64,15 +64,25 @@ namespace Catalog.Infrastructure
             try
             {
                 var connectionParams = configuration.GetSection("ConnectionParameters");
+                var poolingParams = configuration.GetSection("ConnectionPooling");
                 var templates = configuration.GetSection("ConnectionTemplates");
 
                 string template;
                 var parameters = new Dictionary<string, string>();
 
+                // Parámetros comunes de pooling (con valores por defecto)
+                var commonPoolingParams = new Dictionary<string, string>
+                {
+                    ["pooling"] = poolingParams["pooling"] ?? "true",
+                    ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100",
+                    ["minPoolSize"] = poolingParams["minPoolSize"] ?? "5",
+                    ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30",
+                    ["commandTimeout"] = poolingParams["commandTimeout"] ?? "30"
+                };
+
                 switch (environment)
                 {
                     case "Development":
-                        // Para Development - usar LocalDB con Trusted Connection
                         template = templates["Local"] ?? throw new InvalidOperationException("Template Local no encontrado");
                         parameters = new Dictionary<string, string>
                         {
@@ -80,10 +90,14 @@ namespace Catalog.Infrastructure
                             ["database"] = configuration["Catalog:DatabaseName"] ?? "CatalogDB_Dev",
                             ["trusted"] = connectionParams["trusted"] ?? "true"
                         };
+                        // Agregar parámetros de pooling
+                        foreach (var poolParam in commonPoolingParams)
+                        {
+                            parameters[poolParam.Key] = poolParam.Value;
+                        }
                         break;
 
                     case "Docker":
-                        // Para Docker - usar SQL Server con usuario/password
                         template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
                         parameters = new Dictionary<string, string>
                         {
@@ -93,13 +107,17 @@ namespace Catalog.Infrastructure
                             ["password"] = connectionParams["password"] ?? throw new InvalidOperationException("Password requerido para Docker"),
                             ["trust"] = connectionParams["trust"] ?? "true"
                         };
+                        // Agregar parámetros de pooling
+                        foreach (var poolParam in commonPoolingParams)
+                        {
+                            parameters[poolParam.Key] = poolParam.Value;
+                        }
                         break;
 
                     case "Kubernetes":
-                        // Para Kubernetes - usar SA authentication con variable de entorno
                         template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
                         var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
-                        Console.WriteLine($"PASSWORD {dbPassword}");
+
                         if (string.IsNullOrEmpty(dbPassword))
                         {
                             throw new InvalidOperationException("Variable de entorno DB_PASSWORD no encontrada para Kubernetes");
@@ -113,6 +131,12 @@ namespace Catalog.Infrastructure
                             ["password"] = dbPassword,
                             ["trust"] = connectionParams["trust"] ?? "true"
                         };
+                        // Agregar parámetros de pooling específicos para Kubernetes (más conservadores)
+                        parameters["pooling"] = poolingParams["pooling"] ?? "true";
+                        parameters["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "50"; // Más conservador en K8s
+                        parameters["minPoolSize"] = poolingParams["minPoolSize"] ?? "2";
+                        parameters["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30";
+                        parameters["commandTimeout"] = poolingParams["commandTimeout"] ?? "60"; // Más tiempo en K8s
                         break;
 
                     default:
