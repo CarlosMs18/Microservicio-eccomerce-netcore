@@ -166,21 +166,47 @@ try
     app.UseSerilogRequestLogging();
 
     // 11. Migraciones de BD
-    if (environment is "Development" or "Docker")
+    if (environment is "Development" or "Docker" or "Kubernetes")
     {
         using var scope = app.Services.CreateScope();
         var services = scope.ServiceProvider;
-        try
+
+        var retryCount = 0;
+        const int maxRetries = 10;
+
+        while (retryCount < maxRetries)
         {
-            var db = services.GetRequiredService<CatalogDbContext>();
-            await db.Database.MigrateAsync();
-            await CatalogDbInitializer.InitializeAsync(db);
-            Log.Information("🆗 Migraciones aplicadas");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "❌ Error aplicando migraciones");
-            throw;
+            try
+            {
+                var db = services.GetRequiredService<CatalogDbContext>();
+
+                // Esto creará la BD si no existe Y aplicará migraciones
+                Log.Information("🔄 Creando/migrando base de datos...");
+                await db.Database.MigrateAsync();
+
+                Log.Information("📊 Inicializando datos...");
+                await CatalogDbInitializer.InitializeAsync(db);
+
+                Log.Information("🆗 Base de datos lista");
+                break;
+            }
+            catch (Exception ex)
+            {
+                retryCount++;
+                Log.Warning(ex, "❌ Intento {Retry}/{MaxRetries} - Error: {Message}",
+                    retryCount, maxRetries, ex.Message);
+
+                if (retryCount >= maxRetries)
+                {
+                    Log.Fatal(ex, "❌ Error crítico con BD después de {MaxRetries} intentos", maxRetries);
+                    throw;
+                }
+
+                // Espera progresiva: 5s, 10s, 15s, etc.
+                var delaySeconds = 5 * retryCount;
+                Log.Information("⏳ Reintentando en {Delay} segundos...", delaySeconds);
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+            }
         }
     }
 

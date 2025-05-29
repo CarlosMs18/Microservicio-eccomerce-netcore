@@ -17,10 +17,12 @@ spec:
       - name: catalog-service
         image: carlosms18/microservicio-catalog:dev
         env:
-        - name: DB_PASSWORD
+        - name: DB_PASSWORD 
           valueFrom:
             secretKeyRef:
               name: sql-secrets
               key: SA_PASSWORD
+        - name: ASPNETCORE_ENVIRONMENT 
+          value: "Kubernetes"
         ports:
         - containerPort: 80

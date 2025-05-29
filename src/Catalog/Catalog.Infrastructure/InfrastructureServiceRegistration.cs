@@ -99,6 +99,7 @@ namespace Catalog.Infrastructure
                         // Para Kubernetes - usar SA authentication con variable de entorno
                         template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
                         var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+                        Console.WriteLine($"PASSWORD {dbPassword}");
                         if (string.IsNullOrEmpty(dbPassword))
                         {
                             throw new InvalidOperationException("Variable de entorno DB_PASSWORD no encontrada para Kubernetes");
