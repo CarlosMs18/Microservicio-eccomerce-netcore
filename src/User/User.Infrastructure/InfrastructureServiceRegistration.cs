@@ -2,13 +2,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Shared.Core.Interfaces;
 using Shared.Infrastructure.Extensions;
 using Shared.Infrastructure.Interfaces;
-using System;
 using System.Net.Http;
 using System.Reflection;
 using User.Application.Contracts.Persistence;
@@ -25,44 +23,32 @@ namespace User.Infrastructure
     {
         public static IServiceCollection AddInfrastructureServices(
             this IServiceCollection services,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            string environment)
         {
-            // Configuración inicial con logging estructurado
-            var logger = InitializeLogging(services, configuration);
+            // 1. Configuración de la base de datos
+            ConfigureDatabase(services, configuration, environment);
 
-            // Configuración de base de datos con detección de entorno
-            ConfigureDatabase(services, configuration, logger);
-
-            // Configuración de resiliencia (usando tu implementación existente en Shared)
+            // 2. Políticas de resiliencia
             services.AddResiliencePolicies();
 
-            // Registro de servicios
-            RegisterApplicationServices(services, configuration, logger);
+            // 3. Registro de servicios
+            RegisterApplicationServices(services, configuration);
 
-            logger.LogInformation("Infrastructure services configured successfully");
             return services;
         }
 
-        private static ILogger InitializeLogging(IServiceCollection services, IConfiguration configuration)
+        private static void ConfigureDatabase(
+            IServiceCollection services,
+            IConfiguration configuration,
+            string environment)
         {
-            services.AddLogging(configure =>
-            {
-                configure.AddConsole()
-                        .AddConfiguration(configuration.GetSection("Logging"))
-                        .AddJsonConsole(); // Para logs estructurados
-            });
-
-            var loggerFactory = services.BuildServiceProvider().GetRequiredService<ILoggerFactory>();
-            return loggerFactory.CreateLogger("InfrastructureServiceRegistration");
-        }
-
-        private static void ConfigureDatabase(IServiceCollection services, IConfiguration configuration, ILogger logger)
-        {
-            var isKubernetes = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
-            var connectionString = GetConnectionString(configuration, isKubernetes, logger);
+            var connectionString = GetConnectionString(configuration, environment);
 
             services.AddDbContext<UserIdentityDbContext>((provider, options) =>
             {
+                var logger = provider.GetRequiredService<ILogger<UserIdentityDbContext>>();
+
                 options.UseSqlServer(connectionString, sqlOptions =>
                 {
                     sqlOptions.MigrationsAssembly(typeof(UserIdentityDbContext).Assembly.FullName);
@@ -72,42 +58,125 @@ namespace User.Infrastructure
                         errorNumbersToAdd: null);
                 });
 
-                // Configuración según entorno
-                if (!provider.GetRequiredService<IHostEnvironment>().IsProduction())
+                if (environment == "Development")
                 {
                     options.EnableDetailedErrors();
                     options.EnableSensitiveDataLogging();
+                    logger.LogDebug("🔍 Habilitados logs detallados de EF Core");
                 }
             });
         }
 
-        private static string GetConnectionString(IConfiguration configuration, bool isKubernetes, ILogger logger)
+        private static string GetConnectionString(IConfiguration configuration, string environment)
         {
-            var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
-            var connectionString = configuration.GetConnectionString("IdentityConnectionString");
-
-            if (isKubernetes && string.IsNullOrEmpty(dbPassword))
+            try
             {
-                logger.LogError("DB_PASSWORD no está configurado en Kubernetes");
-                throw new ArgumentNullException(nameof(dbPassword), "DB_PASSWORD no está configurado para Kubernetes");
-            }
+                var connectionParams = configuration.GetSection("ConnectionParameters");
+                var poolingParams = configuration.GetSection("ConnectionPooling");
+                var templates = configuration.GetSection("ConnectionTemplates");
 
-            return isKubernetes
-                ? string.Format(connectionString, dbPassword)
-                : connectionString;
+                string template;
+                var parameters = new Dictionary<string, string>();
+
+                // Parámetros comunes de pooling (con valores por defecto)
+                var commonPoolingParams = new Dictionary<string, string>
+                {
+                    ["pooling"] = poolingParams["pooling"] ?? "true",
+                    ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100",
+                    ["minPoolSize"] = poolingParams["minPoolSize"] ?? "5",
+                    ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30",
+                    ["commandTimeout"] = poolingParams["commandTimeout"] ?? "30"
+                };
+
+                switch (environment)
+                {
+                    case "Development":
+                        template = templates["Local"] ?? throw new InvalidOperationException("Template Local no encontrado");
+                        parameters = new Dictionary<string, string>
+                        {
+                            ["server"] = connectionParams["server"] ?? "(localdb)\\mssqllocaldb",
+                            ["database"] = configuration["User:DatabaseName"] ?? "UserDB_Dev",
+                            ["trusted"] = connectionParams["trusted"] ?? "true"
+                        };
+                        // Agregar parámetros de pooling
+                        foreach (var poolParam in commonPoolingParams)
+                        {
+                            parameters[poolParam.Key] = poolParam.Value;
+                        }
+                        break;
+
+                    case "Docker":
+                        template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
+                        parameters = new Dictionary<string, string>
+                        {
+                            ["server"] = connectionParams["server"] ?? "host.docker.internal,1433",
+                            ["database"] = configuration["User:DatabaseName"] ?? "UserDB_Dev",
+                            ["user"] = connectionParams["user"] ?? "sa",
+                            ["password"] = connectionParams["password"] ?? throw new InvalidOperationException("Password requerido para Docker"),
+                            ["trust"] = connectionParams["trust"] ?? "true"
+                        };
+                        // Agregar parámetros de pooling
+                        foreach (var poolParam in commonPoolingParams)
+                        {
+                            parameters[poolParam.Key] = poolParam.Value;
+                        }
+                        break;
+
+                    case "Kubernetes":
+                        template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
+                        var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+
+                        if (string.IsNullOrEmpty(dbPassword))
+                        {
+                            throw new InvalidOperationException("Variable de entorno DB_PASSWORD no encontrada para Kubernetes");
+                        }
+
+                        parameters = new Dictionary<string, string>
+                        {
+                            ["server"] = connectionParams["server"] ?? throw new InvalidOperationException("Server no configurado para Kubernetes"),
+                            ["database"] = configuration["User:DatabaseName"] ?? "UserDB_Dev",
+                            ["user"] = connectionParams["user"] ?? "sa",
+                            ["password"] = dbPassword,
+                            ["trust"] = connectionParams["trust"] ?? "true"
+                        };
+                        // Agregar parámetros de pooling específicos para Kubernetes (más conservadores)
+                        parameters["pooling"] = poolingParams["pooling"] ?? "true";
+                        parameters["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "50"; // Más conservador en K8s
+                        parameters["minPoolSize"] = poolingParams["minPoolSize"] ?? "2";
+                        parameters["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30";
+                        parameters["commandTimeout"] = poolingParams["commandTimeout"] ?? "60"; // Más tiempo en K8s
+                        break;
+
+                    default:
+                        throw new InvalidOperationException($"Entorno '{environment}' no soportado");
+                }
+
+                var connectionString = parameters.Aggregate(template, (current, param) =>
+                    current.Replace($"{{{param.Key}}}", param.Value));
+
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    throw new InvalidOperationException("Cadena de conexión no puede estar vacía");
+                }
+
+                return connectionString;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error al construir connection string para {environment}: {ex.Message}", ex);
+            }
         }
 
         private static void RegisterApplicationServices(
             IServiceCollection services,
-            IConfiguration configuration,
-            ILogger logger)
+            IConfiguration configuration)
         {
-                // 1. Configuración de UnitOfWork y repositorios
+            // 1. Configuración de UnitOfWork y repositorios
             services.AddScoped<IUnitOfWork>(provider =>
-                 new UnitOfWork(
-                     provider.GetRequiredService<UserIdentityDbContext>(),
-                     provider.GetRequiredService<ILogger<UnitOfWork>>(),
-                     provider.GetRequiredService<IUserRepository>()));
+                new UnitOfWork(
+                    provider.GetRequiredService<UserIdentityDbContext>(),
+                    provider.GetRequiredService<ILogger<UnitOfWork>>(),
+                    provider.GetRequiredService<IUserRepository>()));
 
             services.AddScoped<IUserRepository>(provider =>
                 new UserRepository(
@@ -139,7 +208,12 @@ namespace User.Infrastructure
             services.AddAutoMapper(Assembly.GetExecutingAssembly());
 
             // 7. Servicios gRPC
-            services.AddGrpcServices(configuration);
+            services.AddGrpc(options =>
+            {
+                var grpcConfig = configuration.GetSection("GrpcConfiguration");
+                options.EnableDetailedErrors = grpcConfig.GetValue<bool>("EnableDetailedErrors", true);
+                options.MaxReceiveMessageSize = grpcConfig.GetValue<int>("MaxMessageSizeMB", 16) * 1024 * 1024;
+            });
         }
 
         private static void ConfigureIdentityOptions(IdentityOptions options)
@@ -171,8 +245,8 @@ namespace User.Infrastructure
     public static class InfrastructureExtensions
     {
         public static IHttpClientBuilder AddResiliencePolicies(
-         this IHttpClientBuilder builder,
-         Func<IServiceProvider, IRepositoryResilience> resilienceProvider)
+            this IHttpClientBuilder builder,
+            Func<IServiceProvider, IRepositoryResilience> resilienceProvider)
         {
             return builder
                 .AddPolicyHandler((services, request) => resilienceProvider(services).HttpRetryPolicy)
@@ -186,13 +260,6 @@ namespace User.Infrastructure
                 .AddScoped<IAuthService, AuthService>()
                 .AddScoped<IHealthChecker, HealthChecker>()
                 .AddScoped<IExternalAuthService, ExternalAuthService>();
-        }
-
-        private static IHttpClientBuilder AddTimeoutPolicy(
-            this IHttpClientBuilder builder,
-            TimeSpan timeout)
-        {
-            return builder.AddPolicyHandler(Policy.TimeoutAsync<HttpResponseMessage>(timeout));
         }
     }
 }

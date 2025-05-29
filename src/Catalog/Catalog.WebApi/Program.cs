@@ -55,10 +55,9 @@ try
                   retainedFileCountLimit: 15));
     });
 
-    // 4. Configuración de puertos
+    // 4. Configuración de puerto REST
     var portsConfig = builder.Configuration.GetSection("Ports");
     var restPort = portsConfig.GetValue<int>("Rest", 7204);
-    var grpcPort = portsConfig.GetValue<int>("Grpc", 5003);
 
     // 5. Configuración de HttpClient
     var microservicesConfig = builder.Configuration.GetSection("Microservices:User");
@@ -78,7 +77,7 @@ try
     .AddPolicyHandler(HttpClientPolicies.GetRetryPolicy(builder.Configuration))
     .AddPolicyHandler(HttpClientPolicies.GetCircuitBreakerPolicy(builder.Configuration));
 
-    // 6. Configuración gRPC
+    // 6. Configuración gRPC Cliente
     var grpcTemplate = microservicesConfig["GrpcTemplate"] ?? "http://{host}:{port}";
     var grpcHost = serviceParams["host"] ?? "localhost";
     var servicePort = serviceParams["port"] ?? "5001";
@@ -104,7 +103,7 @@ try
 
     builder.Services.AddSingleton<IUserGrpcClient, UserGrpcClient>();
 
-    // 7. Registro de servicios (sin lógica de BD aquí)
+    // 7. Registro de servicios
     builder.Services.AddControllers();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddApplicationServices();
@@ -120,23 +119,14 @@ try
         });
     }
 
-    // 9. Configuración de Kestrel
+    // 9. Configuración de Kestrel (solo HTTP REST)
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(restPort, listenOptions =>
         {
             listenOptions.Protocols = HttpProtocols.Http1;
-            Log.Debug("🌐 HTTP configurado en puerto {Port}", restPort);
+            Log.Debug("🌐 HTTP REST configurado en puerto {Port}", restPort);
         });
-
-        if (environment == "Development")
-        {
-            options.ListenAnyIP(grpcPort, listenOptions =>
-            {
-                listenOptions.Protocols = HttpProtocols.Http2;
-                Log.Debug("🔄 gRPC configurado en puerto {Port}", grpcPort);
-            });
-        }
     });
 
     var app = builder.Build();
@@ -149,11 +139,6 @@ try
         {
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "Catalog v1");
             c.DisplayRequestDuration();
-        });
-
-        app.MapGet("/proto/auth.proto", async context =>
-        {
-            await context.Response.WriteAsync(await File.ReadAllTextAsync("../User/User.Infrastructure/Protos/auth.proto"));
         });
     }
 
@@ -180,7 +165,6 @@ try
             {
                 var db = services.GetRequiredService<CatalogDbContext>();
 
-                // Esto creará la BD si no existe Y aplicará migraciones
                 Log.Information("🔄 Creando/migrando base de datos...");
                 await db.Database.MigrateAsync();
 
@@ -202,7 +186,6 @@ try
                     throw;
                 }
 
-                // Espera progresiva: 5s, 10s, 15s, etc.
                 var delaySeconds = 5 * retryCount;
                 Log.Information("⏳ Reintentando en {Delay} segundos...", delaySeconds);
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
@@ -239,16 +222,14 @@ static void LogEndpointsConfiguration(IConfiguration config, string environment,
 {
     try
     {
-        // Log de configuración de BD
         var connectionParams = config.GetSection("ConnectionParameters");
         var databaseName = config["Catalog:DatabaseName"] ?? "CatalogDB_Dev";
         var serverName = connectionParams["server"] ?? "Unknown";
 
         Log.Information("🗃️ DB para {Environment}: {Database} en {Server}", environment, databaseName, serverName);
 
-        // Log de endpoints
         Log.Information("🌐 Endpoints configurados:");
-        Log.Information("  REST: http://localhost:{Port}/api/v1/", restPort);
+        Log.Information("  REST API: http://localhost:{Port}/api/v1/", restPort);
         Log.Information("  User Service HTTP: {UserHttpUrl}", userServiceBaseUrl);
         Log.Information("  User Service gRPC: {UserGrpcUrl}", grpcUrl);
     }

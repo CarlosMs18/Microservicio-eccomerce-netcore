@@ -1,12 +1,9 @@
-﻿using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;
-using Microsoft.OpenApi.Models;
-using Polly;
-using System.Data.SqlClient;
+using Serilog;
+using Serilog.Events;
+using Serilog.Formatting.Compact;
 using User.Application.Models;
 using User.Infrastructure;
 using User.Infrastructure.Persistence;
@@ -14,204 +11,116 @@ using User.Infrastructure.Services.External.Grpc;
 using User.WebAPI.Middlewares;
 using Users.Application;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// ========== CONFIGURACIÓN MULTIFUENTE ==========
-builder.Configuration
-    .AddJsonFile("appsettings.json", optional: false)
-    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
-    .AddEnvironmentVariables(); // Para Docker/K8s
-
-// ========== LOGGING AVANZADO ==========
-var logger = LoggerFactory.Create(config =>
-{
-    config.AddConsole()
-          .AddConfiguration(builder.Configuration.GetSection("Logging"))
-          .AddJsonConsole() // Mejor formato para logs estructurados
-          .SetMinimumLevel(LogLevel.Debug);
-}).CreateLogger("Bootstrap");
+// Bootstrap logger
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Debug()
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .CreateBootstrapLogger();
 
 try
 {
-    // ========== DETECCIÓN DE ENTORNO MEJORADA ==========
-    var environmentInfo = new
+    Log.Information("🚀 Iniciando User Service");
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    // 1. Detección de entorno
+    var environment = DetectEnvironment();
+    Log.Information("🔧 Entorno detectado: {Environment}", environment);
+
+    // 2. Carga de configuración
+    builder.Configuration
+        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+        .AddJsonFile($"appsettings.{environment}.json", optional: true)
+        .AddEnvironmentVariables();
+
+    // 3. Configuración de Serilog
+    builder.Host.UseSerilog((ctx, services, config) =>
     {
-        IsKubernetes = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")),
-        IsDocker = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")),
-        EnvironmentName = builder.Environment.EnvironmentName,
-        IsProduction = builder.Environment.IsProduction()
-    };
+        config.MinimumLevel.Information()
+              .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+              .MinimumLevel.Override("System", LogEventLevel.Warning)
+              .Enrich.FromLogContext()
+              .WriteTo.Async(a => a.Console())
+              .WriteTo.Async(a => a.File(
+                  new CompactJsonFormatter(),
+                  $"logs/{environment.ToLower()}-log-.json",
+                  rollingInterval: RollingInterval.Day,
+                  retainedFileCountLimit: 15));
+    });
 
-    logger.LogInformation("""
-        ====================================
-        Iniciando aplicación en modo: {Environment}
-        • Kubernetes: {IsK8s}
-        • Docker: {IsDocker}
-        • Producción: {IsProd}
-        ====================================
-        """,
-        environmentInfo.EnvironmentName,
-        environmentInfo.IsKubernetes,
-        environmentInfo.IsDocker,
-        environmentInfo.IsProduction);
+    // 4. Configuración de puertos
+    var portsConfig = builder.Configuration.GetSection("Ports");
+    var restPort = portsConfig.GetValue<int>("Rest", 7251);
+    var grpcPort = portsConfig.GetValue<int>("Grpc", 5003);
 
-    // ========== CONFIGURACIÓN DE RESILIENCIA ==========
-    builder.Services.AddHttpClient("RetryClient")
-        .AddTransientHttpErrorPolicy(policy =>
-            policy.WaitAndRetryAsync(3, retryAttempt =>
-                TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
-
-    // ========== CONFIGURACIÓN DE SERVICIOS ==========
+    // 5. Registro de servicios
     builder.Services.AddControllers();
+    builder.Services.AddHttpContextAccessor();
     builder.Services.AddApplicationServices();
-    builder.Services.AddInfrastructureServices(builder.Configuration);
+    builder.Services.AddInfrastructureServices(builder.Configuration, environment);
 
-    // ========== HEALTH CHECKS MEJORADOS ==========
+    // 6. Health Checks
     builder.Services.AddHealthChecks()
-      .AddDbContextCheck<UserIdentityDbContext>(
-          name: "sqlserver",
-          tags: new[] { "db", "sqlserver" })
-      // Verificación básica de que el servicio está vivo
-      .AddCheck("service_status", () =>
-          HealthCheckResult.Healthy("Service is responsive"),
-          tags: new[] { "service" });
+        .AddDbContextCheck<UserIdentityDbContext>(
+            name: "sqlserver",
+            tags: new[] { "db", "sqlserver" })
+        .AddCheck("service_status", () =>
+            Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Service is responsive"),
+            tags: new[] { "service" });
 
-    // ========== SWAGGER CONFIGURABLE ==========
-    if (!environmentInfo.IsProduction)
+    // 7. Configuración de Swagger solo para desarrollo
+    if (environment == "Development")
     {
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
         {
-            c.SwaggerDoc("v1", new OpenApiInfo
-            {
-                Title = $"User Service API - {environmentInfo.EnvironmentName}",
-                Version = "v1",
-                Description = $"Environment: {environmentInfo.EnvironmentName}",
-                Contact = new OpenApiContact
-                {
-                    Name = "Dev Team",
-                    Email = "dev@example.com"
-                }
-            });
-
-            // Configuración adicional para ambientes no productivos
-            if (environmentInfo.EnvironmentName == "Development")
-            {
-                c.EnableAnnotations();
-            }
+            c.SwaggerDoc("v1", new() { Title = "User API", Version = "v1" });
         });
     }
 
-    // ========== CONFIGURACIÓN AVANZADA DE KESTREL ==========
-    ConfigureKestrel(builder, environmentInfo, logger);
-
-    var app = builder.Build();
-
-    // ========== PIPELINE CONFIGURATION ==========
-    ConfigurePipeline(app, environmentInfo, logger);
-
-    // ========== INICIALIZACIÓN ==========
-    await InitializeApplication(app, logger);
-
-    logger.LogInformation("""
-        ====================================
-        Aplicación iniciada correctamente
-        Entorno: {Environment}
-        UTC Time: {StartTime}
-        ====================================
-        """,
-        environmentInfo.EnvironmentName,
-        DateTime.UtcNow);
-
-    await app.RunAsync();
-}
-catch (Exception ex)
-{
-    logger.LogCritical(ex, """
-        ====================================
-        ERROR CRÍTICO DURANTE EL INICIO
-        Mensaje: {ErrorMessage}
-        ====================================
-        """, ex.Message);
-    throw;
-}
-
-// ========== MÉTODOS AUXILIARES ==========
-
-void ConfigureKestrel(WebApplicationBuilder builder, dynamic environmentInfo, ILogger logger)
-{
+    // 8. Configuración de Kestrel (REST + gRPC)
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10MB
-        options.Limits.MinRequestBodyDataRate = null; // Para evitar timeouts en uploads grandes
-
-        // Configuración dinámica de puertos
-        var grpcPort = environmentInfo.IsKubernetes
-            ? int.Parse(Environment.GetEnvironmentVariable("GRPC_PORT") ?? "5001")
-            : builder.Configuration.GetValue<int>("Grpc:Port");
-
-        var restPort = environmentInfo.IsKubernetes
-            ? int.Parse(Environment.GetEnvironmentVariable("REST_PORT") ?? "80")
-            : builder.Configuration.GetValue<int>("RestPort");
-
-        // gRPC Endpoint
-        options.ListenAnyIP(grpcPort, listenOptions =>
-        {
-            listenOptions.Protocols = HttpProtocols.Http2;
-            logger.LogDebug("gRPC endpoint configurado en puerto {Port}", grpcPort);
-        });
+        options.Limits.MinRequestBodyDataRate = null;
 
         // REST Endpoint
         options.ListenAnyIP(restPort, listenOptions =>
         {
             listenOptions.Protocols = HttpProtocols.Http1;
-            if (environmentInfo.IsProduction && !environmentInfo.IsKubernetes)
-            {
-                listenOptions.UseHttps("/app/certs/tls.crt", "/app/certs/tls.key");
-                logger.LogDebug("HTTPS habilitado para REST");
-            }
-            logger.LogDebug("REST endpoint configurado en puerto {Port}", restPort);
+            Log.Debug("🌐 HTTP REST configurado en puerto {Port}", restPort);
+        });
+
+        // gRPC Endpoint
+        options.ListenAnyIP(grpcPort, listenOptions =>
+        {
+            listenOptions.Protocols = HttpProtocols.Http2;
+            Log.Debug("📡 gRPC configurado en puerto {Port}", grpcPort);
         });
     });
-}
 
-void ConfigurePipeline(WebApplication app, dynamic environmentInfo, ILogger logger)
-{
-    // Middleware de logging de requests
-    app.Use(async (context, next) =>
-    {
-        var startTime = DateTime.UtcNow;
-        logger.LogDebug("Iniciando request: {Method} {Path}",
-            context.Request.Method,
-            context.Request.Path);
+    var app = builder.Build();
 
-        await next();
-
-        logger.LogDebug("Request completado: {Method} {Path} - {StatusCode} en {ElapsedMs}ms",
-            context.Request.Method,
-            context.Request.Path,
-            context.Response.StatusCode,
-            (DateTime.UtcNow - startTime).TotalMilliseconds);
-    });
-
-    if (!environmentInfo.IsProduction)
+    // 9. Middleware pipeline
+    if (environment == "Development")
     {
         app.UseSwagger();
         app.UseSwaggerUI(c =>
         {
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "User Service API");
-            c.ConfigObject.DisplayRequestDuration = true;
-            c.EnablePersistAuthorization();
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "User v1");
+            c.DisplayRequestDuration();
         });
     }
 
+    app.UseHttpsRedirection();
     app.UseRouting();
     app.UseAuthorization();
     app.MapControllers();
-    
+    app.UseMiddleware<ExceptionMiddleware>();
+    app.UseSerilogRequestLogging();
 
-    // Health Check mejorado
-    app.MapHealthChecks("/health", new HealthCheckOptions
+    // 10. Health Check endpoint
+    app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
     {
         Predicate = _ => true,
         ResponseWriter = async (context, report) =>
@@ -219,7 +128,7 @@ void ConfigurePipeline(WebApplication app, dynamic environmentInfo, ILogger logg
             var result = new
             {
                 status = report.Status.ToString(),
-                environment = environmentInfo.EnvironmentName,
+                environment = environment,
                 checks = report.Entries.Select(e => new
                 {
                     name = e.Key,
@@ -232,80 +141,101 @@ void ConfigurePipeline(WebApplication app, dynamic environmentInfo, ILogger logg
         }
     });
 
-    // gRPC Service
+    // 11. gRPC Service
     app.MapGrpcService<AuthGrpcService>();
-}
 
-async Task InitializeApplication(WebApplication app, ILogger logger)
-{
-    // Configuración de base de datos
-    var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
-    var connectionString = string.Format(
-        app.Configuration.GetConnectionString("IdentityConnectionString"),
-        dbPassword
-    );
-
-    // Log seguro de conexión (sin exponer credenciales)
-    var connectionBuilder = new SqlConnectionStringBuilder(connectionString);
-    logger.LogInformation("""
-        Configuración de base de datos:
-        • Servidor: {Server}
-        • Base de datos: {Database}
-        • Usuario: {User}
-        • Timeout: {Timeout}s
-        • Pool size: {MaxPoolSize}
-        """,
-        connectionBuilder.DataSource,
-        connectionBuilder.InitialCatalog,
-        connectionBuilder.UserID,
-        connectionBuilder.ConnectTimeout,
-        connectionBuilder.MaxPoolSize);
-
-    // Inicialización condicional de BD
-    if (!app.Environment.IsProduction() ||
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+    // 12. Migraciones de BD
+    if (environment is "Development" or "Docker" or "Kubernetes")
     {
-        await InitializeDatabase(app, logger);
+        using var scope = app.Services.CreateScope();
+        var services = scope.ServiceProvider;
+
+        var retryCount = 0;
+        const int maxRetries = 10;
+
+        while (retryCount < maxRetries)
+        {
+            try
+            {
+                var context = services.GetRequiredService<UserIdentityDbContext>();
+
+                Log.Information("🔄 Creando/migrando base de datos...");
+                await context.Database.MigrateAsync();
+
+                Log.Information("📊 Inicializando datos...");
+                await DbInitializer.InitializeAsync(
+                    context,
+                    services.GetRequiredService<UserManager<ApplicationUser>>(),
+                    services.GetRequiredService<RoleManager<ApplicationRole>>()
+                );
+
+                Log.Information("🆗 Base de datos lista");
+                Log.Information("👥 Usuarios: {UserCount}, Roles: {RoleCount}",
+                    context.Users.Count(),
+                    context.Roles.Count());
+                break;
+            }
+            catch (Exception ex)
+            {
+                retryCount++;
+                Log.Warning(ex, "❌ Intento {Retry}/{MaxRetries} - Error: {Message}",
+                    retryCount, maxRetries, ex.Message);
+
+                if (retryCount >= maxRetries)
+                {
+                    Log.Fatal(ex, "❌ Error crítico con BD después de {MaxRetries} intentos", maxRetries);
+                    throw;
+                }
+
+                var delaySeconds = 5 * retryCount;
+                Log.Information("⏳ Reintentando en {Delay} segundos...", delaySeconds);
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+            }
+        }
     }
+
+    // 13. Log de endpoints configurados
+    LogEndpointsConfiguration(builder.Configuration, environment, restPort, grpcPort);
+
+    Log.Information("✅ User Service listo y ejecutándose");
+    await app.RunAsync();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "❌ Error crítico al iniciar el servicio");
+    throw;
+}
+finally
+{
+    Log.CloseAndFlush();
 }
 
-async Task InitializeDatabase(WebApplication app, ILogger logger)
+static string DetectEnvironment()
 {
-    using var scope = app.Services.CreateScope();
-    var services = scope.ServiceProvider;
-    var dbLogger = services.GetRequiredService<ILogger<Program>>();
+    if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+        return "Kubernetes";
+    if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
+        return "Docker";
+    return "Development";
+}
 
+static void LogEndpointsConfiguration(IConfiguration config, string environment, int restPort, int grpcPort)
+{
     try
     {
-        dbLogger.LogInformation("Iniciando migración de base de datos...");
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var connectionParams = config.GetSection("ConnectionParameters");
+        var databaseName = config["User:DatabaseName"] ?? "UserDB_Dev";
+        var serverName = connectionParams["server"] ?? "Unknown";
 
-        var context = services.GetRequiredService<UserIdentityDbContext>();
-        await context.Database.MigrateAsync();
+        Log.Information("🗃️ DB para {Environment}: {Database} en {Server}", environment, databaseName, serverName);
 
-        dbLogger.LogInformation("Migración completada en {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
-
-        dbLogger.LogInformation("Inicializando datos base...");
-        stopwatch.Restart();
-
-        await DbInitializer.InitializeAsync(
-            context,
-            services.GetRequiredService<UserManager<ApplicationUser>>(),
-            services.GetRequiredService<RoleManager<ApplicationRole>>()
-        );
-
-        dbLogger.LogInformation("""
-            Inicialización completada en {ElapsedMs}ms
-            • Usuarios creados: {UserCount}
-            • Roles creados: {RoleCount}
-            """,
-            stopwatch.ElapsedMilliseconds,
-            context.Users.Count(),
-            context.Roles.Count());
+        Log.Information("🌐 Endpoints configurados:");
+        Log.Information("  REST API: http://localhost:{RestPort}/api/User/", restPort);
+        Log.Information("  gRPC Service: http://localhost:{GrpcPort}", grpcPort);
+        Log.Information("  Health Check: http://localhost:{RestPort}/health", restPort);
     }
     catch (Exception ex)
     {
-        dbLogger.LogError(ex, "Error durante la inicialización de BD");
-        if (app.Environment.IsProduction()) throw;
+        Log.Warning(ex, "Error al mostrar configuración de endpoints");
     }
 }
