@@ -87,7 +87,6 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "database", "database", "{747AE917-67BD-4107-8185-15B596D03079}"
 	ProjectSection(SolutionItems) = preProject
 		k8s\base\database\kustomization.yaml = k8s\base\database\kustomization.yaml
-		k8s\base\database\pvc.yaml = k8s\base\database\pvc.yaml
 		k8s\base\database\service.yaml = k8s\base\database\service.yaml
 	EndProjectSection
 EndProject
@@ -101,7 +100,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{EAC1
 		k8s\overlays\development\user\secrets\app-secret.yaml = k8s\overlays\development\user\secrets\app-secret.yaml
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared.Infrastructure", "Shared\Shared.Infrastructure\Shared.Infrastructure.csproj", "{70CF99F4-A4E1-4728-8344-69F3217AECE7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shared.Infrastructure", "Shared\Shared.Infrastructure\Shared.Infrastructure.csproj", "{70CF99F4-A4E1-4728-8344-69F3217AECE7}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infrastructure", "infrastructure", "{15A2FEFE-8AA5-4D65-A693-67F3E8FD00C9}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\infrastructure\kustomization.yaml = k8s\infrastructure\kustomization.yaml
+		k8s\infrastructure\namespace.yaml = k8s\infrastructure\namespace.yaml
+		k8s\infrastructure\sql-pvc.yaml = k8s\infrastructure\sql-pvc.yaml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -185,6 +191,7 @@ Global
 		{AB554CBE-FB18-479F-86CF-38BB94CC7277} = {9C3D9428-1611-4DEF-8874-62081BE2EFA1}
 		{EAC117B8-726C-412C-8964-1C519FC83E9F} = {87ED10D7-C90C-49DE-9DDF-0D8A4B8E74C8}
 		{70CF99F4-A4E1-4728-8344-69F3217AECE7} = {C6F608F7-B79D-4E34-8E80-2948C251A389}
+		{15A2FEFE-8AA5-4D65-A693-67F3E8FD00C9} = {E4C00B5E-3699-44B8-8CA1-97577B858B48}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}
