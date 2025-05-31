@@ -7,9 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Features\Users\Queries\**" />
-    <EmbeddedResource Remove="Features\Users\Queries\**" />
-    <None Remove="Features\Users\Queries\**" />
+    <Folder Include="DTos\Responses\" />
+    <Folder Include="DTos\Requests\" />
+    <Folder Include="Features\CartItems\Commands\" />
+    <Folder Include="Features\CartItems\Queries\" />
+    <Folder Include="Features\Carts\Commands\" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,9 +20,11 @@
     <PackageReference Include="FluentValidation" Version="11.2.1" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.2.1" />
     <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="10.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.0" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cart.Domain\Cart.Domain.csproj" />
   </ItemGroup>
 
 </Project>
