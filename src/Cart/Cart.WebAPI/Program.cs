@@ -2,11 +2,19 @@
 using Cart.Infrastructure;
 using Cart.Infrastructure.Persistence;
 using Cart.WebAPI.Middlewares;
+using Cart.Infrastructure.SyncDataServices.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
+using Shared.Core.Interfaces;
+using System.Net.Http.Headers;
+using Cart.Infrastructure.Resilience;
+using Polly;
+using Grpc.Core;
+using Cart.Infrastructure.SyncDataServices.Grpc;
+using User.Auth;
 
 // Bootstrap logger
 Log.Logger = new LoggerConfiguration()
@@ -49,6 +57,48 @@ try
     var portsConfig = builder.Configuration.GetSection("Ports");
     var restPort = portsConfig.GetValue<int>("Rest", 7205); // Puerto diferente para Cart
 
+    var microservicesConfig = builder.Configuration.GetSection("Microservices:User");
+    var serviceParams = builder.Configuration.GetSection("ServiceParameters");
+
+    var httpTemplate = microservicesConfig["HttpTemplate"] ?? "http://{host}/api/User/";
+    var host = serviceParams["host"] ?? "localhost";
+
+    var userServiceBaseUrl = httpTemplate.Replace("{host}", host);
+    builder.Services.AddHttpClient<IExternalAuthService, UserHttpService>(client =>
+    {
+        client.BaseAddress = new Uri(userServiceBaseUrl);
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        client.Timeout = TimeSpan.FromSeconds(10);
+    })
+      .AddPolicyHandler(HttpClientPolicies.GetRetryPolicy(builder.Configuration))
+      .AddPolicyHandler(HttpClientPolicies.GetCircuitBreakerPolicy(builder.Configuration));
+
+
+    // 6. Configuración gRPC Cliente
+    var grpcTemplate = microservicesConfig["GrpcTemplate"] ?? "http://{host}:{port}";
+    var grpcHost = serviceParams["host"] ?? "localhost";
+    var servicePort = serviceParams["port"] ?? "5001";
+
+    var grpcUrl = grpcTemplate
+        .Replace("{host}", grpcHost)
+        .Replace("{port}", servicePort);
+
+    builder.Services.AddGrpcClient<AuthService.AuthServiceClient>(options =>
+    {
+        options.Address = new Uri(grpcUrl);
+    })
+    .ConfigureChannel(o => o.HttpHandler = new SocketsHttpHandler
+    {
+        PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
+        KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+        KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+        EnableMultipleHttp2Connections = true
+    })
+    .AddPolicyHandler(Policy<HttpResponseMessage>
+        .Handle<RpcException>(e => e.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
+        .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
+
+    builder.Services.AddSingleton<IUserGrpcClient, UserGrpcClient>();
     // 5. Registro de servicios
     builder.Services.AddControllers();
     builder.Services.AddHttpContextAccessor();
@@ -92,6 +142,7 @@ try
     app.UseRouting();
     // Middleware personalizado si lo tienes
     // app.UseMiddleware<TokenValidationMiddleware>();
+    app.UseMiddleware<TokenGrpcValidationMiddleware>();
     app.UseAuthorization();
     app.MapControllers();
     app.UseMiddleware<ExceptionMiddleware>();
