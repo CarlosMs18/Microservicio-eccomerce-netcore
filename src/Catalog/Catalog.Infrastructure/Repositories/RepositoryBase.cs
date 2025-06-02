@@ -23,7 +23,7 @@ namespace Catalog.Infrastructure.Repositories
             => await _retryPolicy.ExecuteAsync(async () =>
                 await _context.Set<T>().AsNoTracking().ToListAsync());
 
-        public async Task<T> GetByIdAsync(string id)
+        public async Task<T> GetByIdAsync(Guid id)
             => await _retryPolicy.ExecuteAsync(async () =>
                 await _context.Set<T>().FindAsync(id));
 

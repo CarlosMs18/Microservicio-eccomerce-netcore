@@ -1,0 +1,33 @@
+﻿syntax = "proto3";
+
+option csharp_namespace = "Catalog.Grpc";
+
+package catalog;
+
+
+service CatalogService {
+  rpc CheckProductExists(ProductExistsRequest) returns (ProductExistsResponse);
+  rpc GetProductStock(ProductStockRequest) returns (ProductStockResponse);
+}
+
+
+message ProductExistsRequest {
+  string product_id = 1;
+}
+
+
+message ProductExistsResponse {
+  bool exists = 1;
+  string message = 2;
+}
+
+
+message ProductStockRequest {
+  string product_id = 1;
+}
+
+message ProductStockResponse {
+  bool exists = 1;
+  int32 stock = 2;
+  string message = 3;
+}

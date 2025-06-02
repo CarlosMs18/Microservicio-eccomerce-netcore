@@ -1,22 +1,13 @@
 ﻿using Catalog.Application;
 using Catalog.Infrastructure;
 using Catalog.Infrastructure.Persistence;
-using Catalog.Infrastructure.Resilience;
-using Catalog.Infrastructure.SyncDataServices.Grpc;
-using Catalog.Infrastructure.SyncDataServices.Http;
+using Catalog.Infrastructure.Services.External.Grpc;
 using Catalog.WebAPI.Middlewares;
-using Grpc.Core;
-using Grpc.Net.Client;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
-using Polly;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
-using Shared.Core.Interfaces;
-using System;
-using System.Net.Http.Headers;
-using User.Auth;
 
 // Bootstrap logger
 Log.Logger = new LoggerConfiguration()
@@ -59,57 +50,13 @@ try
     var portsConfig = builder.Configuration.GetSection("Ports");
     var restPort = portsConfig.GetValue<int>("Rest", 7204);
 
-    // 5. Configuración de HttpClient
-    var microservicesConfig = builder.Configuration.GetSection("Microservices:User");
-    var serviceParams = builder.Configuration.GetSection("ServiceParameters");
-
-    var httpTemplate = microservicesConfig["HttpTemplate"] ?? "http://{host}/api/User/";
-    var host = serviceParams["host"] ?? "localhost";
-
-    var userServiceBaseUrl = httpTemplate.Replace("{host}", host);
-
-    builder.Services.AddHttpClient<IExternalAuthService, UserHttpService>(client =>
-    {
-        client.BaseAddress = new Uri(userServiceBaseUrl);
-        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        client.Timeout = TimeSpan.FromSeconds(10);
-    })
-    .AddPolicyHandler(HttpClientPolicies.GetRetryPolicy(builder.Configuration))
-    .AddPolicyHandler(HttpClientPolicies.GetCircuitBreakerPolicy(builder.Configuration));
-
-    // 6. Configuración gRPC Cliente
-    var grpcTemplate = microservicesConfig["GrpcTemplate"] ?? "http://{host}:{port}";
-    var grpcHost = serviceParams["host"] ?? "localhost";
-    var servicePort = serviceParams["port"] ?? "5001";
-
-    var grpcUrl = grpcTemplate
-        .Replace("{host}", grpcHost)
-        .Replace("{port}", servicePort);
-
-    builder.Services.AddGrpcClient<AuthService.AuthServiceClient>(options =>
-    {
-        options.Address = new Uri(grpcUrl);
-    })
-    .ConfigureChannel(o => o.HttpHandler = new SocketsHttpHandler
-    {
-        PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
-        KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-        KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
-        EnableMultipleHttp2Connections = true
-    })
-    .AddPolicyHandler(Policy<HttpResponseMessage>
-        .Handle<RpcException>(e => e.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
-        .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
-
-    builder.Services.AddSingleton<IUserGrpcClient, UserGrpcClient>();
-
-    // 7. Registro de servicios
+    // 5. Registro de servicios (toda la configuración técnica ahora está en Infrastructure)
     builder.Services.AddControllers();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration, environment);
 
-    // 8. Configuración de Swagger solo para desarrollo
+    // 6. Configuración de Swagger solo para desarrollo
     if (environment == "Development")
     {
         builder.Services.AddEndpointsApiExplorer();
@@ -119,7 +66,7 @@ try
         });
     }
 
-    // 9. Configuración de Kestrel (solo HTTP REST)
+    // 7. Configuración de Kestrel (solo HTTP REST)
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(restPort, listenOptions =>
@@ -131,7 +78,7 @@ try
 
     var app = builder.Build();
 
-    // 10. Middleware pipeline
+    // 8. Middleware pipeline
     if (environment == "Development")
     {
         app.UseSwagger();
@@ -150,7 +97,10 @@ try
     app.UseMiddleware<ExceptionMiddleware>();
     app.UseSerilogRequestLogging();
 
-    // 11. Migraciones de BD
+    // Mapear servicio gRPC
+    app.MapGrpcService<CatalogGrpcService>();
+
+    // 9. Migraciones de BD
     if (environment is "Development" or "Docker" or "Kubernetes")
     {
         using var scope = app.Services.CreateScope();
@@ -193,8 +143,8 @@ try
         }
     }
 
-    // 12. Log de endpoints configurados
-    LogEndpointsConfiguration(builder.Configuration, environment, restPort, userServiceBaseUrl, grpcUrl);
+    // 10. Log de endpoints configurados
+    LogEndpointsConfiguration(builder.Configuration, environment, restPort);
 
     Log.Information("✅ Catalog Service listo y ejecutándose");
     await app.RunAsync();
@@ -218,7 +168,7 @@ static string DetectEnvironment()
     return "Development";
 }
 
-static void LogEndpointsConfiguration(IConfiguration config, string environment, int restPort, string userServiceBaseUrl, string grpcUrl)
+static void LogEndpointsConfiguration(IConfiguration config, string environment, int restPort)
 {
     try
     {
@@ -230,6 +180,19 @@ static void LogEndpointsConfiguration(IConfiguration config, string environment,
 
         Log.Information("🌐 Endpoints configurados:");
         Log.Information("  REST API: http://localhost:{Port}/api/v1/", restPort);
+
+        // Log de configuración gRPC (leído desde configuración)
+        var microservicesConfig = config.GetSection("Microservices:User");
+        var serviceParams = config.GetSection("ServiceParameters");
+
+        var httpTemplate = microservicesConfig["HttpTemplate"] ?? "http://{host}/api/User/";
+        var grpcTemplate = microservicesConfig["GrpcTemplate"] ?? "http://{host}:{port}";
+        var host = serviceParams["host"] ?? "localhost";
+        var port = serviceParams["port"] ?? "5001";
+
+        var userServiceBaseUrl = httpTemplate.Replace("{host}", host);
+        var grpcUrl = grpcTemplate.Replace("{host}", host).Replace("{port}", port);
+
         Log.Information("  User Service HTTP: {UserHttpUrl}", userServiceBaseUrl);
         Log.Information("  User Service gRPC: {UserGrpcUrl}", grpcUrl);
     }

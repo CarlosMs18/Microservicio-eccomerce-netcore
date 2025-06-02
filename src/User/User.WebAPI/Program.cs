@@ -58,6 +58,7 @@ try
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration, environment);
+    //builder.Services.AddGrpcServices(builder.Configuration);
 
     // 6. Health Checks
     builder.Services.AddHealthChecks()
@@ -111,7 +112,7 @@ try
             c.DisplayRequestDuration();
         });
     }
-
+    Console.WriteLine("Oyeeee");
     app.UseHttpsRedirection();
     app.UseRouting();
     app.UseAuthorization();

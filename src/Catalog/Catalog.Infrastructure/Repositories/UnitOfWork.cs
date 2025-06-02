@@ -13,23 +13,30 @@ namespace Catalog.Infrastructure.Repositories
         private readonly CatalogDbContext _context;
         private readonly ILogger<UnitOfWork> _logger;
         private readonly ICategoryRepository _categoryRepository;
+        private readonly IProductRepository _productRepository;
+        private readonly IProductImageRepository _productImageRepository;
         private Hashtable _repositories;
         private IDbContextTransaction _transaction;
 
         public UnitOfWork(
             CatalogDbContext context,
             ILogger<UnitOfWork> logger,
-            ICategoryRepository categoryRepository) // Inyección directa
+            ICategoryRepository categoryRepository,
+            IProductRepository productRepository,
+            IProductImageRepository productImageRepository) // Inyección directa
         {
             _context = context;
             _logger = logger;
-            _categoryRepository = categoryRepository;
             _repositories = new Hashtable();
+            _categoryRepository = categoryRepository;
+            _productRepository = productRepository;
+            _productImageRepository = productImageRepository;
         }
 
         public CatalogDbContext CatalogDbContext => _context;
         public ICategoryRepository CategoryRepository => _categoryRepository; // Usa la instancia inyectada
-
+        public IProductImageRepository ProductImageRepository => _productImageRepository;   
+        public IProductRepository ProductRepository => _productRepository;
         public async Task BeginTransaction()
         {
             _transaction = await _context.Database.BeginTransactionAsync();

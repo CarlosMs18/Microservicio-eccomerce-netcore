@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net7.0</TargetFramework>
@@ -37,5 +37,9 @@
 
 	<ItemGroup>
 		<Protobuf Include="..\..\User\User.Infrastructure\Protos\auth.proto" GrpcServices="Client" ProtoRoot="..\..\User\User.Infrastructure\Protos\" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Protobuf Include="..\..\Catalog\Catalog.Infrastructure\Protos\catalog.proto" GrpcServices="Client" ProtoRoot="..\..\Catalog\Catalog.Infrastructure\Protos\" />
 	</ItemGroup>
 </Project>

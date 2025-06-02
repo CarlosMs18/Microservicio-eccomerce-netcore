@@ -1,9 +1,8 @@
 ﻿using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Microsoft.Extensions.Logging;
-using System;
 
-namespace User.Infrastructure.Services.External.Grpc.Interceptors
+namespace Catalog.Infrastructure.Services.External.Grpc.Interceptors
 {
     public class ExceptionInterceptor : Interceptor
     {

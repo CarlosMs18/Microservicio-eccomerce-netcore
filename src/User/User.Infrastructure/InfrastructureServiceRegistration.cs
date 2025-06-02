@@ -16,6 +16,8 @@ using User.Infrastructure.Persistence;
 using User.Infrastructure.Repositories;
 using User.Infrastructure.Services.External.Grpc;
 using User.Infrastructure.Services.Internal;
+using User.Infrastructure.Services.External.Grpc.Interceptors; // Asegúrate de tener esta referencia
+using Grpc.AspNetCore.Server;
 
 namespace User.Infrastructure
 {
@@ -34,6 +36,9 @@ namespace User.Infrastructure
 
             // 3. Registro de servicios
             RegisterApplicationServices(services, configuration);
+
+            // 4. Configuración de servicios gRPC
+            ConfigureGrpcServices(services, configuration);
 
             return services;
         }
@@ -206,14 +211,40 @@ namespace User.Infrastructure
 
             // 6. AutoMapper
             services.AddAutoMapper(Assembly.GetExecutingAssembly());
+        }
 
-            // 7. Servicios gRPC
+        private static void ConfigureGrpcServices(
+            IServiceCollection services,
+            IConfiguration configuration)
+        {
+            // 1. Configuración base de gRPC Server
             services.AddGrpc(options =>
             {
-                var grpcConfig = configuration.GetSection("GrpcConfiguration");
-                options.EnableDetailedErrors = grpcConfig.GetValue<bool>("EnableDetailedErrors", true);
-                options.MaxReceiveMessageSize = grpcConfig.GetValue<int>("MaxMessageSizeMB", 16) * 1024 * 1024;
+                // Opciones recomendadas para producción
+                options.EnableDetailedErrors = configuration.GetValue<bool>("Grpc:EnableDetailedErrors", true); // true para User service por defecto
+                options.MaxReceiveMessageSize = configuration.GetValue<int>("Grpc:MaxMessageSizeMB", 16) * 1024 * 1024; // 16MB por defecto para User
+                options.IgnoreUnknownServices = true;
+
+                // Interceptores
+                options.Interceptors.Add<ExceptionInterceptor>();
             });
+
+            // 2. Registro del servicio gRPC específico (AuthGrpcService)
+            services.AddScoped<AuthGrpcService>();
+
+            // 3. Registro del interceptor como Singleton
+            services.AddSingleton<ExceptionInterceptor>();
+
+            // 4. Configuración avanzada
+            services.Configure<GrpcServiceOptions>(options =>
+            {
+                options.EnableDetailedErrors = configuration.GetValue<bool>("Grpc:EnableDetailedErrors", true);
+                options.ResponseCompressionLevel = System.IO.Compression.CompressionLevel.Optimal;
+            });
+
+            // 5. Health Checks para gRPC (opcional pero recomendado para User service)
+            // services.AddGrpcHealthChecks()
+            //        .AddCheck("auth_grpc", () => HealthCheckResult.Healthy("User Auth gRPC service is healthy"));
         }
 
         private static void ConfigureIdentityOptions(IdentityOptions options)
@@ -259,7 +290,7 @@ namespace User.Infrastructure
             return services
                 .AddScoped<IAuthService, AuthService>()
                 .AddScoped<IHealthChecker, HealthChecker>()
-                .AddScoped<IExternalAuthService, ExternalAuthService>();
+                .AddScoped<IExternalAuthService, ExternalAuthService>(); // cuando usaba http para el token
         }
     }
 }
