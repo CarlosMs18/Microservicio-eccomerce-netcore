@@ -49,6 +49,7 @@ try
     // 4. Configuración de puerto REST
     var portsConfig = builder.Configuration.GetSection("Ports");
     var restPort = portsConfig.GetValue<int>("Rest", 7204);
+    var grpcPort = portsConfig.GetValue<int>("Grpc", 7205);
 
     // 5. Registro de servicios (toda la configuración técnica ahora está en Infrastructure)
     builder.Services.AddControllers();
@@ -73,6 +74,11 @@ try
         {
             listenOptions.Protocols = HttpProtocols.Http1;
             Log.Debug("🌐 HTTP REST configurado en puerto {Port}", restPort);
+        });
+        options.ListenAnyIP(grpcPort, listenOptions =>
+        {
+            listenOptions.Protocols = HttpProtocols.Http2;
+            Log.Debug("📡 gRPC configurado en puerto {Port}", grpcPort);
         });
     });
 

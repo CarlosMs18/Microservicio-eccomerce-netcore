@@ -1,20 +1,13 @@
-﻿using Cart.Application.Contracts.External;
-using Cart.Application.Contracts.Persistence;
+﻿using Cart.Application.Contracts.Persistence;
+using Cart.Infrastructure.Extensions;
 using Cart.Infrastructure.Persistence;
 using Cart.Infrastructure.Repositories;
-using Cart.Infrastructure.SyncDataServices.Grpc;
-using Catalog.Grpc;
-using Grpc.Core;
-using Grpc.Net.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Polly;
 using Shared.Infrastructure.Extensions;
 using Shared.Infrastructure.Interfaces;
-using System.Net.Http;
-using User.Auth;
 
 namespace Cart.Infrastructure
 {
@@ -35,7 +28,8 @@ namespace Cart.Infrastructure
             RegisterRepositories(services);
 
             // 4. Configuración de clientes gRPC
-            ConfigureGrpcClients(services, configuration);
+            //ConfigureGrpcClients(services, configuration);
+            services.AddCartGrpcClients(configuration);
 
             return services;
         }
@@ -191,89 +185,89 @@ namespace Cart.Infrastructure
             services.AddScoped(typeof(IAsyncRepository<>), typeof(RepositoryBase<>));
         }
 
-        private static void ConfigureGrpcClients(
-            IServiceCollection services,
-            IConfiguration configuration)
-        {
-            // Obtener configuración común
-            var microservicesConfig = configuration.GetSection("Microservices:User");
-            var serviceParams = configuration.GetSection("ServiceParameters");
+        //private static void ConfigureGrpcClients(
+        //    IServiceCollection services,
+        //    IConfiguration configuration)
+        //{
+        //    // Obtener configuración común
+        //    var microservicesConfig = configuration.GetSection("Microservices:User");
+        //    var serviceParams = configuration.GetSection("ServiceParameters");
 
-            var grpcTemplate = microservicesConfig["GrpcTemplate"] ?? "http://{host}:{port}";
-            var grpcHost = serviceParams["host"] ?? "localhost";
+        //    var grpcTemplate = microservicesConfig["GrpcTemplate"] ?? "http://{host}:{port}";
+        //    var grpcHost = serviceParams["host"] ?? "localhost";
 
-            // 1. Cliente gRPC para User Service (AuthService)
-            ConfigureUserGrpcClient(services, grpcTemplate, grpcHost, serviceParams);
+        //    // 1. Cliente gRPC para User Service (AuthService)
+        //    ConfigureUserGrpcClient(services, grpcTemplate, grpcHost, serviceParams);
 
-            // 2. Cliente gRPC para Catalog Service
-            ConfigureCatalogGrpcClient(services, configuration, grpcTemplate, grpcHost);
+        //    // 2. Cliente gRPC para Catalog Service
+        //    ConfigureCatalogGrpcClient(services, configuration, grpcTemplate, grpcHost);
 
-            // 3. Registro de wrappers/servicios
-            services.AddSingleton<IUserGrpcClient, UserGrpcClient>();
-            services.AddSingleton<ICatalogService, CatalogGrpcService>();
-        }
+        //    // 3. Registro de wrappers/servicios
+        //    services.AddSingleton<IUserGrpcClient, UserGrpcClient>();
+        //    services.AddSingleton<ICatalogService, CatalogGrpcService>();
+        //}
 
-        private static void ConfigureUserGrpcClient(
-            IServiceCollection services,
-            string grpcTemplate,
-            string grpcHost,
-            IConfigurationSection serviceParams)
-        {
-            var userServicePort = serviceParams["port"] ?? "5001";
-            var userGrpcUrl = grpcTemplate
-                .Replace("{host}", grpcHost)
-                .Replace("{port}", userServicePort);
+        //private static void ConfigureUserGrpcClient(
+        //    IServiceCollection services,
+        //    string grpcTemplate,
+        //    string grpcHost,
+        //    IConfigurationSection serviceParams)
+        //{
+        //    var userServicePort = serviceParams["port"] ?? "5001";
+        //    var userGrpcUrl = grpcTemplate
+        //        .Replace("{host}", grpcHost)
+        //        .Replace("{port}", userServicePort);
 
-            services.AddGrpcClient<AuthService.AuthServiceClient>(options =>
-            {
-                options.Address = new Uri(userGrpcUrl);
-            })
-            .ConfigureChannel(channelOptions =>
-            {
-                channelOptions.HttpHandler = new SocketsHttpHandler
-                {
-                    PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
-                    KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-                    KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
-                    EnableMultipleHttp2Connections = true
-                };
-            })
-            .AddPolicyHandler(Policy<HttpResponseMessage>
-                .Handle<RpcException>(e => e.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
-                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
-        }
+        //    services.AddGrpcClient<AuthService.AuthServiceClient>(options =>
+        //    {
+        //        options.Address = new Uri(userGrpcUrl);
+        //    })
+        //    .ConfigureChannel(channelOptions =>
+        //    {
+        //        channelOptions.HttpHandler = new SocketsHttpHandler
+        //        {
+        //            PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
+        //            KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+        //            KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+        //            EnableMultipleHttp2Connections = true
+        //        };
+        //    })
+        //    .AddPolicyHandler(Policy<HttpResponseMessage>
+        //        .Handle<RpcException>(e => e.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
+        //        .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
+        //}
 
-        private static void ConfigureCatalogGrpcClient(
-            IServiceCollection services,
-            IConfiguration configuration,
-            string grpcTemplate,
-            string grpcHost)
-        {
-            // Configuración específica para Catalog Service
-            var catalogServiceParams = configuration.GetSection("ServiceParameters:Catalog");
-            var catalogServicePort = catalogServiceParams?["port"] ?? "7204"; // Puerto por defecto del Catalog Service
+        //private static void ConfigureCatalogGrpcClient(
+        //    IServiceCollection services,
+        //    IConfiguration configuration,
+        //    string grpcTemplate,
+        //    string grpcHost)
+        //{
+        //    // Configuración específica para Catalog Service
+        //    var catalogServiceParams = configuration.GetSection("ServiceParameters:Catalog");
+        //    var catalogServicePort = catalogServiceParams?["port"] ?? "7204"; // Puerto por defecto del Catalog Service
 
-            var catalogGrpcUrl = grpcTemplate
-                .Replace("{host}", grpcHost)
-                .Replace("{port}", catalogServicePort);
+        //    var catalogGrpcUrl = grpcTemplate
+        //        .Replace("{host}", grpcHost)
+        //        .Replace("{port}", catalogServicePort);
 
-            services.AddGrpcClient<CatalogService.CatalogServiceClient>(options =>
-            {
-                options.Address = new Uri(catalogGrpcUrl);
-            })
-            .ConfigureChannel(channelOptions =>
-            {
-                channelOptions.HttpHandler = new SocketsHttpHandler
-                {
-                    PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
-                    KeepAlivePingDelay = TimeSpan.FromSeconds(60),
-                    KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
-                    EnableMultipleHttp2Connections = true
-                };
-            })
-            .AddPolicyHandler(Policy<HttpResponseMessage>
-                .Handle<RpcException>(e => e.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
-                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
-        }
+        //    services.AddGrpcClient<CatalogService.CatalogServiceClient>(options =>
+        //    {
+        //        options.Address = new Uri(catalogGrpcUrl);
+        //    })
+        //    .ConfigureChannel(channelOptions =>
+        //    {
+        //        channelOptions.HttpHandler = new SocketsHttpHandler
+        //        {
+        //            PooledConnectionIdleTimeout = Timeout.InfiniteTimeSpan,
+        //            KeepAlivePingDelay = TimeSpan.FromSeconds(60),
+        //            KeepAlivePingTimeout = TimeSpan.FromSeconds(30),
+        //            EnableMultipleHttp2Connections = true
+        //        };
+        //    })
+        //    .AddPolicyHandler(Policy<HttpResponseMessage>
+        //        .Handle<RpcException>(e => e.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
+        //        .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
+        //}
     }
 }

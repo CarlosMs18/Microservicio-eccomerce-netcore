@@ -2,7 +2,7 @@
 {
     public interface ICatalogService
     {
-        Task<bool> ProductExistsAsync(int productId);
-        Task<int> GetProductStockAsync(int productId);
+        Task<bool> ProductExistsAsync(Guid productId);
+        Task<int> GetProductStockAsync(Guid productId);
     }
 }

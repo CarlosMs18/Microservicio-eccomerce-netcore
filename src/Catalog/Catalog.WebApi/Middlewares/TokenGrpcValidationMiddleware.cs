@@ -11,6 +11,7 @@ namespace Catalog.WebAPI.Middlewares
         private readonly RequestDelegate _next;
         private readonly IUserGrpcClient _grpcClient;
         private readonly ILogger<TokenGrpcValidationMiddleware> _logger;
+
         private static readonly Dictionary<string, HashSet<string>> _publicRoutes = new()
         {
             ["/api/category"] = new HashSet<string> { "GET" },
@@ -32,14 +33,14 @@ namespace Catalog.WebAPI.Middlewares
             var path = context.Request.Path.Value?.ToLowerInvariant();
             var method = context.Request.Method;
 
-            if (IsPublicRoute(method, path))
+            // ✅ SOLUCIÓN: Verificar si es una ruta pública (incluye gRPC)
+            if (IsPublicRoute(context, method, path))
             {
                 await _next(context);
                 return;
             }
 
             var authHeader = context.Request.Headers["Authorization"].ToString();
-
             if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -53,7 +54,6 @@ namespace Catalog.WebAPI.Middlewares
             try
             {
                 var response = await _grpcClient.ValidateTokenAsync(token);
-
                 if (!response.IsValid)
                 {
                     _logger.LogWarning("Token inválido para ruta: {Path}", path);
@@ -71,6 +71,7 @@ namespace Catalog.WebAPI.Middlewares
 
                 context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Bearer"));
                 _logger.LogInformation("Acceso autorizado para usuario: {UserId}", response.UserId);
+
                 await _next(context);
             }
             catch (TimeoutException)
@@ -87,14 +88,65 @@ namespace Catalog.WebAPI.Middlewares
             }
         }
 
-        private bool IsPublicRoute(string method, string path)
+        private bool IsPublicRoute(HttpContext context, string method, string path)
         {
+            // ✅ Permitir requests OPTIONS (CORS)
             if (method == "OPTIONS") return true;
+
+            // ✅ Validar path no nulo
             if (string.IsNullOrEmpty(path)) return false;
 
-            return _publicRoutes.Any(route =>
+            // ✅ SOLUCIÓN PRINCIPAL: Excluir todas las comunicaciones gRPC internas
+            // Opción 1: Por Content-Type
+            if (context.Request.ContentType?.Contains("application/grpc") == true)
+            {
+                _logger.LogDebug("🔓 Permitiendo comunicación gRPC interna: {Path}", path);
+                return true;
+            }
+
+            // Opción 2: Por protocolo HTTP/2 + path que no sea REST API
+            if (context.Request.Protocol == "HTTP/2" && !path.StartsWith("/api/"))
+            {
+                _logger.LogDebug("🔓 Permitiendo comunicación gRPC (HTTP/2): {Path}", path);
+                return true;
+            }
+
+            // Opción 3: Por patrones de path gRPC conocidos
+            if (IsGrpcPath(path))
+            {
+                _logger.LogDebug("🔓 Permitiendo comunicación gRPC por path: {Path}", path);
+                return true;
+            }
+
+            // ✅ Verificar rutas públicas REST configuradas
+            bool isPublicRestRoute = _publicRoutes.Any(route =>
                 path.StartsWith(route.Key) &&
                 route.Value.Contains(method));
+
+            if (isPublicRestRoute)
+            {
+                _logger.LogDebug("🔓 Permitiendo ruta REST pública: {Method} {Path}", method, path);
+                return true;
+            }
+
+            // ✅ Si no es pública, requiere autenticación
+            _logger.LogDebug("🔒 Ruta requiere autenticación: {Method} {Path}", method, path);
+            return false;
+        }
+
+        private bool IsGrpcPath(string path)
+        {
+            // Patrones comunes de rutas gRPC
+            var grpcPatterns = new[]
+            {
+                "/catalog.",           // /catalog.CatalogProtoService/
+                "/grpc/",             // Si usas prefijo custom
+                "grpc",               // Cualquier path que contenga 'grpc'
+                "/proto/",            // Si usas prefijo proto
+            };
+
+            return grpcPatterns.Any(pattern =>
+                path.Contains(pattern, StringComparison.OrdinalIgnoreCase));
         }
     }
 }

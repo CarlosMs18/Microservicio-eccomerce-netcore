@@ -22,6 +22,7 @@ namespace Catalog.Infrastructure.Services.External.Grpc
         {
             try
             {
+                Console.WriteLine("ho");
                 // 1. VALIDACIÓN DE INPUT - Mejor práctica
                 var validationResult = ValidateProductId(request.ProductId);
                 if (!validationResult.IsValid)
@@ -74,6 +75,7 @@ namespace Catalog.Infrastructure.Services.External.Grpc
         {
             try
             {
+                Console.WriteLine("ho2");
                 // 1. VALIDACIÓN DE INPUT - Mejor práctica
                 var validationResult = ValidateProductId(request.ProductId);
                 if (!validationResult.IsValid)

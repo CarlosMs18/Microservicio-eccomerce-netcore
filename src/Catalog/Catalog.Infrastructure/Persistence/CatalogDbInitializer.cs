@@ -1,5 +1,4 @@
 ﻿using Catalog.Domain;
-using Catalog.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Shared.Core.Extensions;
@@ -30,7 +29,7 @@ namespace Catalog.Infrastructure.Persistence
             {
                 Id = Guid.NewGuid(),
                 Name = "Electrónicos",
-                Description = "Dispositivos electrónicos y gadgets tecnológicos"
+                Description = "Dispositivos electrónicos y gadgets tecnológicos"   
             }.ApplyAudit(systemUserId, isNew: true),  // 👈 Aplica auditoría
             new Category
             {
@@ -59,7 +58,8 @@ namespace Catalog.Infrastructure.Persistence
                 Description = "Último modelo con cámara de 108MP",
                 Price = 899.99m,
                 CategoryId = categories[0].Id,
-                IsActive = true
+                IsActive = true,
+                Stock = 22
             }.ApplyAudit(systemUserId, isNew: true),  // 👈 Auditoría aquí
             new Product
             {
@@ -68,7 +68,8 @@ namespace Catalog.Infrastructure.Persistence
                 Description = "Laptop de alto rendimiento para profesionales",
                 Price = 1299.99m,
                 CategoryId = categories[0].Id,
-                IsActive = true
+                IsActive = true,
+                Stock=33
             }.ApplyAudit(systemUserId, isNew: true),
             new Product
             {
@@ -77,7 +78,8 @@ namespace Catalog.Infrastructure.Persistence
                 Description = "100% algodón orgánico, talla única",
                 Price = 24.99m,
                 CategoryId = categories[1].Id,
-                IsActive = true
+                IsActive = true,
+                Stock = 44
             }.ApplyAudit(systemUserId, isNew: true),
             new Product
             {
@@ -86,7 +88,8 @@ namespace Catalog.Infrastructure.Persistence
                 Description = "Juego de sábanas de algodón egipcio",
                 Price = 59.99m,
                 CategoryId = categories[2].Id,
-                IsActive = true
+                IsActive = true,
+                Stock = 55
             }.ApplyAudit(systemUserId, isNew: true)
         };
 

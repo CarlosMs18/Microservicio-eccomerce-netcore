@@ -36,7 +36,7 @@ namespace Cart.WebAPI.Middlewares
             }
 
             var authHeader = context.Request.Headers["Authorization"].ToString();
-
+            Console.WriteLine(authHeader);  
             if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;

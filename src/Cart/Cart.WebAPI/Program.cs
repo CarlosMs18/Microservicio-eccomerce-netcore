@@ -173,27 +173,25 @@ static void LogEndpointsConfiguration(IConfiguration config, string environment,
         var serverName = connectionParams["server"] ?? "Unknown";
 
         Log.Information("🗃️ DB para {Environment}: {Database} en {Server}", environment, databaseName, serverName);
-
         Log.Information("🌐 Endpoints configurados:");
         Log.Information("  REST API: http://localhost:{Port}/api/v1/", restPort);
 
-        // Log de configuración gRPC (leído desde configuración)
-        var microservicesConfig = config.GetSection("Microservices:User");
-        var serviceParams = config.GetSection("ServiceParameters");
+        // ✅ CORRECTO - Lee desde Microservices:User
+        var userConfig = config.GetSection("Microservices:User");
+        var userHost = userConfig["host"] ?? "localhost";
+        var userPort = userConfig["port"] ?? "5003";
+        var grpcTemplate = config["Microservices:User:GrpcTemplate"] ?? "http://{host}:{port}";
+        var userGrpcUrl = grpcTemplate.Replace("{host}", userHost).Replace("{port}", userPort);
 
-        var grpcTemplate = microservicesConfig["GrpcTemplate"] ?? "http://{host}:{port}";
-        var host = serviceParams["host"] ?? "localhost";
-        var port = serviceParams["port"] ?? "5001";
-
-        var userGrpcUrl = grpcTemplate.Replace("{host}", host).Replace("{port}", port);
-
-        // También para Catalog Service
-        var catalogServiceParams = config.GetSection("ServiceParameters:Catalog");
-        var catalogPort = catalogServiceParams?["port"] ?? "7204";
-        var catalogGrpcUrl = grpcTemplate.Replace("{host}", host).Replace("{port}", catalogPort);
+        // ✅ CORRECTO - Lee desde Microservices:Catalog
+        var catalogConfig = config.GetSection("Microservices:Catalog");
+        var catalogHost = catalogConfig["host"] ?? "localhost";
+        var catalogPort = catalogConfig["port"] ?? "7204";
+        var catalogGrpcUrl = grpcTemplate.Replace("{host}", catalogHost).Replace("{port}", catalogPort);
 
         Log.Information("  User Service gRPC: {UserGrpcUrl}", userGrpcUrl);
         Log.Information("  Catalog Service gRPC: {CatalogGrpcUrl}", catalogGrpcUrl);
+        Log.Information("  Health Check: http://localhost:{Port}/health", restPort);
     }
     catch (Exception ex)
     {

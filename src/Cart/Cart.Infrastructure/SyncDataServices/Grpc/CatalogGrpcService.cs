@@ -18,7 +18,7 @@ namespace Cart.Infrastructure.SyncDataServices.Grpc
             _logger = logger;
         }
 
-        public async Task<bool> ProductExistsAsync(int productId)
+        public async Task<bool> ProductExistsAsync(Guid productId)
         {
             try
             {
@@ -26,7 +26,7 @@ namespace Cart.Infrastructure.SyncDataServices.Grpc
 
                 var request = new ProductExistsRequest
                 {
-                    ProductId = productId.ToString()
+                    ProductId = productId.ToString() 
                 };
 
                 var response = await _client.CheckProductExistsAsync(request);
@@ -56,7 +56,7 @@ namespace Cart.Infrastructure.SyncDataServices.Grpc
             }
         }
 
-        public async Task<int> GetProductStockAsync(int productId)
+        public async Task<int> GetProductStockAsync(Guid productId)
         {
             try
             {
@@ -64,7 +64,7 @@ namespace Cart.Infrastructure.SyncDataServices.Grpc
 
                 var request = new ProductStockRequest
                 {
-                    ProductId = productId.ToString()
+                    ProductId = productId.ToString() // Conversión de Guid a string para gRPC
                 };
 
                 var response = await _client.GetProductStockAsync(request);
