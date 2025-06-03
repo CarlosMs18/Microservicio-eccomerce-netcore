@@ -2,6 +2,7 @@
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using Cart.Application.Contracts.External;
+using Cart.Application.DTos.External;
 
 namespace Cart.Infrastructure.SyncDataServices.Grpc
 {
@@ -98,6 +99,73 @@ namespace Cart.Infrastructure.SyncDataServices.Grpc
             {
                 _logger.LogError(ex, "❌ Error inesperado al obtener stock del producto {ProductId}", productId);
                 throw new Exception($"Error al obtener stock del producto {productId}", ex);
+            }
+        }
+
+        public async Task<ProductDetailsDto> GetProductDetailsAsync(Guid productId)
+        {
+            try
+            {
+                _logger.LogDebug("🔍 Obteniendo detalles del producto {ProductId} via gRPC", productId);
+
+                var request = new ProductDetailsRequest
+                {
+                    ProductId = productId.ToString()
+                };
+
+                var response = await _client.GetProductDetailsAsync(request);
+
+                if (!response.Exists)
+                {
+                    _logger.LogWarning("🚫 Producto {ProductId} no existe o está inactivo: {Message}",
+                        productId, response.Message);
+
+                    return null; // O puedes lanzar una excepción según tu lógica
+                }
+
+                _logger.LogInformation("✅ Detalles del producto {ProductId} obtenidos exitosamente",
+                    productId);
+
+                // Mapear de gRPC response a DTO
+                var productDto = new ProductDetailsDto
+                {
+                    Id = Guid.Parse(response.Product.Id),
+                    Name = response.Product.Name,
+                    Description = response.Product.Description,
+                    Price = (decimal)response.Product.Price,
+                    IsActive = response.Product.IsActive,
+                    Stock = response.Product.Stock,
+                    Category = new CategoryDto
+                    {
+                        Id = Guid.Parse(response.Product.Category.Id),
+                        Name = response.Product.Category.Name,
+                        Description = response.Product.Category.Description
+                    },
+                    Images = response.Product.Images.Select(img => new ProductImageDto
+                    {
+                        Id = Guid.Parse(img.Id),
+                        ImageUrl = img.ImageUrl
+                    }).ToList()
+                };
+
+                return productDto;
+            }
+            catch (RpcException rpcEx)
+            {
+                _logger.LogError(rpcEx, "❌ Error gRPC al obtener detalles del producto {ProductId}: {Status} - {Detail}",
+                    productId, rpcEx.StatusCode, rpcEx.Status.Detail);
+
+                return rpcEx.StatusCode switch
+                {
+                    StatusCode.NotFound => null,
+                    StatusCode.InvalidArgument => null,
+                    _ => throw new Exception($"Error al obtener detalles del producto: {rpcEx.Status.Detail}", rpcEx)
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error inesperado al obtener detalles del producto {ProductId}", productId);
+                throw new Exception($"Error al obtener detalles del producto {productId}", ex);
             }
         }
     }

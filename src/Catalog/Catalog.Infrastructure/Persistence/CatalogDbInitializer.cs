@@ -105,6 +105,54 @@ namespace Catalog.Infrastructure.Persistence
                 ImageUrl = "https://example.com/images/smartphone-premium.jpg",
                 ProductId = products[0].Id
             }.ApplyAudit(systemUserId, isNew: true),
+              new ProductImage
+    {
+        Id = Guid.NewGuid(),
+        ImageUrl = "https://example.com/images/smartphone-premium-2.jpg",
+        ProductId = products[0].Id
+    }.ApplyAudit(systemUserId, isNew: true),
+
+    // Imágenes para Laptop Ultradelgada
+    new ProductImage
+    {
+        Id = Guid.NewGuid(),
+        ImageUrl = "https://example.com/images/laptop-ultradelgada-1.jpg",
+        ProductId = products[1].Id
+    }.ApplyAudit(systemUserId, isNew: true),
+    new ProductImage
+    {
+        Id = Guid.NewGuid(),
+        ImageUrl = "https://example.com/images/laptop-ultradelgada-2.jpg",
+        ProductId = products[1].Id
+    }.ApplyAudit(systemUserId, isNew: true),
+
+    // Imágenes para Camiseta Algodón
+    new ProductImage
+    {
+        Id = Guid.NewGuid(),
+        ImageUrl = "https://example.com/images/camiseta-algodon-1.jpg",
+        ProductId = products[2].Id
+    }.ApplyAudit(systemUserId, isNew: true),
+    new ProductImage
+    {
+        Id = Guid.NewGuid(),
+        ImageUrl = "https://example.com/images/camiseta-algodon-2.jpg",
+        ProductId = products[2].Id
+    }.ApplyAudit(systemUserId, isNew: true),
+
+    // Imágenes para Juego de Sábanas
+    new ProductImage
+    {
+        Id = Guid.NewGuid(),
+        ImageUrl = "https://example.com/images/juego-sabanas-1.jpg",
+        ProductId = products[3].Id
+    }.ApplyAudit(systemUserId, isNew: true),
+    new ProductImage
+    {
+        Id = Guid.NewGuid(),
+        ImageUrl = "https://example.com/images/juego-sabanas-2.jpg",
+        ProductId = products[3].Id
+    }.ApplyAudit(systemUserId, isNew: true)
             // ... más imágenes
         };
 

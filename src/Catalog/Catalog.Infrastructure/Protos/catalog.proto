@@ -8,8 +8,40 @@ package catalog;
 service CatalogService {
   rpc CheckProductExists(ProductExistsRequest) returns (ProductExistsResponse);
   rpc GetProductStock(ProductStockRequest) returns (ProductStockResponse);
+  rpc GetProductDetails(ProductDetailsRequest) returns (ProductDetailsResponse);
 }
 
+message ProductDetailsRequest {
+  string product_id = 1;
+}
+
+message ProductDetailsResponse {
+  bool exists = 1;
+  string message = 2;
+  ProductDetails product = 3; 
+}
+
+message ProductDetails {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;  
+  bool is_active = 5;
+  int32 stock = 6;
+  CategoryInfo category = 7;
+  repeated ProductImageInfo images = 8;  
+}
+
+message CategoryInfo {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+}
+
+message ProductImageInfo {
+  string id = 1;
+  string image_url = 2;
+}
 
 message ProductExistsRequest {
   string product_id = 1;

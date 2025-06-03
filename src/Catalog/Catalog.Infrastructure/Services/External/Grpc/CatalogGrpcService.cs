@@ -135,6 +135,102 @@ namespace Catalog.Infrastructure.Services.External.Grpc
             }
         }
 
+        public override async Task<ProductDetailsResponse> GetProductDetails(
+            ProductDetailsRequest request,
+            ServerCallContext context)
+        {
+            try
+            {
+                // 1. VALIDACIÓN DE INPUT
+                var validationResult = ValidateProductId(request.ProductId);
+                if (!validationResult.IsValid)
+                {
+                    _logger.LogWarning("❌ ProductId inválido: {ProductId} - {Error}",
+                        request.ProductId, validationResult.ErrorMessage);
+
+                    throw new RpcException(new Status(StatusCode.InvalidArgument, validationResult.ErrorMessage));
+                }
+
+                var productId = validationResult.ProductId;
+                _logger.LogDebug("🔍 Obteniendo detalles completos del producto {ProductId}", productId);
+
+                // 2. OBTENER PRODUCTO CON RELACIONES (Category e Images)
+                var product = await _unitOfWork.ProductRepository.GetProductWithDetailsAsync(productId);
+
+                if (product == null)
+                {
+                    _logger.LogInformation("🚫 Producto {ProductId} no encontrado", productId);
+                    return new ProductDetailsResponse
+                    {
+                        Exists = false,
+                        Message = "Producto no encontrado",
+                        Product = null
+                    };
+                }
+
+                if (!product.IsActive)
+                {
+                    _logger.LogInformation("⚠️ Producto {ProductId} existe pero está inactivo", productId);
+                    return new ProductDetailsResponse
+                    {
+                        Exists = false,
+                        Message = "Producto inactivo",
+                        Product = null
+                    };
+                }
+
+                _logger.LogInformation("✅ Detalles del producto {ProductId} obtenidos exitosamente", productId);
+
+                // 3. MAPEAR A RESPONSE
+                var productDetails = new ProductDetails
+                {
+                    Id = product.Id.ToString(),
+                    Name = product.Name,
+                    Description = product.Description,
+                    Price = (double)product.Price,
+                    IsActive = product.IsActive,
+                    Stock = product.Stock,
+                    Category = new CategoryInfo
+                    {
+                        Id = product.Category.Id.ToString(),
+                        Name = product.Category.Name,
+                        Description = product.Category.Description ?? string.Empty
+                    }
+                };
+
+                // Agregar imágenes si existen
+                if (product.Images != null && product.Images.Any())
+                {
+                    foreach (var image in product.Images)
+                    {
+                        productDetails.Images.Add(new ProductImageInfo
+                        {
+                            Id = image.Id.ToString(),
+                            ImageUrl = image.ImageUrl
+                        });
+                    }
+                }
+
+                return new ProductDetailsResponse
+                {
+                    Exists = true,
+                    Message = "Detalles del producto obtenidos exitosamente",
+                    Product = productDetails
+                };
+            }
+            catch (RpcException)
+            {
+                // Re-lanzar RpcException tal como está
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error interno al obtener detalles del producto {ProductId}", request.ProductId);
+                throw new RpcException(new Status(StatusCode.Internal, "Error interno del servidor"));
+            }
+        }
+
+
         // 2. MÉTODO DE VALIDACIÓN CENTRALIZADO - Mejor práctica
         private static ProductIdValidationResult ValidateProductId(string productIdString)
         {

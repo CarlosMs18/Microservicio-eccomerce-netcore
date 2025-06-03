@@ -51,7 +51,7 @@ namespace Cart.Application.Features.Carts.Commands
                         };
                     }
 
-                    // 1. Verificar si el producto existe (ahora usando Guid)
+                    // 1. Verificar si el producto existe (responsabilidad única)
                     var productExists = await _catalogService.ProductExistsAsync(productIdGuid);
 
                     if (!productExists)
@@ -67,7 +67,7 @@ namespace Cart.Application.Features.Carts.Commands
                         };
                     }
 
-                    // 2. Verificar stock disponible (ahora usando Guid)
+                    // 2. Verificar stock disponible (responsabilidad única)
                     var availableStock = await _catalogService.GetProductStockAsync(productIdGuid);
 
                     if (availableStock < requestedQuantity)
@@ -85,20 +85,55 @@ namespace Cart.Application.Features.Carts.Commands
                         };
                     }
 
-                    // 3. Si todo está bien, proceder con el agregado al carrito
-                    _logger.LogInformation("✅ Producto {ProductId} validado correctamente. Stock disponible: {AvailableStock}",
-                        productIdGuid, availableStock);
+                    // 3. Obtener detalles del producto para el carrito (responsabilidad única)
+                    var productDetails = await _catalogService.GetProductDetailsAsync(productIdGuid);
+
+                    if (productDetails == null)
+                    {
+                        _logger.LogError("❌ Error: No se pudieron obtener los detalles del producto {ProductId}", productIdGuid);
+                        return new AddToCartResponse
+                        {
+                            Success = false,
+                            Message = "Error al obtener los detalles del producto",
+                            ProductId = productIdGuid,
+                            AvailableStock = availableStock,
+                            RequestedQuantity = requestedQuantity
+                        };
+                    }
+
+                    // 4. Crear CartItem con todos los detalles del producto
+                    _logger.LogInformation("✅ Producto {ProductId} validado correctamente. Creando item del carrito...", productIdGuid);
+
+                    var cartItem = new Domain.CartItem
+                    {
+                        ProductId = productDetails.Id,
+                        ProductName = productDetails.Name,
+                        ProductDescription = productDetails.Description,
+                        Price = productDetails.Price,
+                        Quantity = requestedQuantity,
+                        // Tomar la primera imagen si existe
+                        ProductImageUrl = productDetails.Images?.FirstOrDefault()?.ImageUrl,
+                        CategoryId = productDetails.Category.Id,
+                        CategoryName = productDetails.Category.Name
+                    };
 
                     // Aquí iría la lógica para agregar al carrito
-                    // Por ejemplo: await _cartRepository.AddProductToCartAsync(userId, productIdGuid, requestedQuantity);
+                    // Por ejemplo: await _cartRepository.AddItemToCartAsync(userId, cartItem);
+
+                    _logger.LogInformation("🎉 CartItem creado: {ProductName} - Cantidad: {Quantity} - Subtotal: {Subtotal}",
+                        cartItem.ProductName, cartItem.Quantity, cartItem.Subtotal);
 
                     return new AddToCartResponse
                     {
                         Success = true,
                         Message = "Producto agregado al carrito exitosamente",
                         ProductId = productIdGuid,
-                        AvailableStock = availableStock,
-                        RequestedQuantity = requestedQuantity
+                        AvailableStock = availableStock, // Usamos el stock que ya obtuvimos
+                        RequestedQuantity = requestedQuantity,
+                        // Información adicional del producto agregado
+                        ProductName = productDetails.Name,
+                        ProductImageUrl = cartItem.ProductImageUrl,
+                        Subtotal = cartItem.Subtotal
                     };
                 }
                 catch (Exception ex)

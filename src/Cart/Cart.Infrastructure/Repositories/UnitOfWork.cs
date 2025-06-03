@@ -30,7 +30,7 @@ namespace Cart.Infrastructure.Repositories
             _repositories = new Hashtable();
         }
 
-        public CartDbContext CatalogDbContext => _context;
+        public CartDbContext CartDbContext => _context;
         public ICartRepository CartRepository => _cartRepository; // Usa la instancia inyectada
 
         public ICartItemRepository CartItemRepository => _cartItemRepository;
