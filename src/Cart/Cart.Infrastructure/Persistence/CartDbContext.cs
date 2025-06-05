@@ -3,15 +3,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Cart.Infrastructure.Persistence
 {
-    public class CartDbContext :DbContext
+    public class CartDbContext : DbContext
     {
-        public DbSet<Cart.Domain.Cart> Carts { get; set; }  
+        public DbSet<Cart.Domain.Cart> Carts { get; set; }
         public DbSet<CartItem> CartItems { get; set; }
 
         public CartDbContext(DbContextOptions<CartDbContext> options) : base(options)
         {
 
         }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -40,21 +41,18 @@ namespace Cart.Infrastructure.Persistence
                 entity.Property(c => c.UpdatedDate);
 
                 // ÍNDICES PARA PERFORMANCE
-                // Necesitamos agregar UserId como propiedad en Cart o crear índice en CreatedBy
                 entity.HasIndex(c => c.CreatedBy)
                     .HasDatabaseName("IX_Carts_CreatedBy");
 
-                // Índice para búsquedas por fecha de creación
                 entity.HasIndex(c => c.CreatedDate)
                     .HasDatabaseName("IX_Carts_CreatedDate");
 
-                // Índice para limpiar carritos expirados por UpdatedDate
                 entity.HasIndex(c => c.UpdatedDate)
                     .HasDatabaseName("IX_Carts_UpdatedDate");
 
                 // Relación uno a muchos con CartItems
                 entity.HasMany(c => c.Items)
-                    .WithOne()
+                    .WithOne(ci => ci.Cart)
                     .HasForeignKey(ci => ci.CartId)
                     .OnDelete(DeleteBehavior.Cascade);
 
@@ -82,6 +80,21 @@ namespace Cart.Infrastructure.Persistence
                     .IsRequired()
                     .HasMaxLength(200);
 
+                // NUEVOS CAMPOS AGREGADOS
+                entity.Property(ci => ci.ProductDescription)
+                    .IsRequired()
+                    .HasMaxLength(1000); // Ajusta el tamaño según necesites
+
+                entity.Property(ci => ci.ProductImageUrl)
+                    .HasMaxLength(500); // URL puede ser nula
+
+                entity.Property(ci => ci.CategoryId)
+                    .IsRequired();
+
+                entity.Property(ci => ci.CategoryName)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
                 entity.Property(ci => ci.Price)
                     .IsRequired()
                     .HasColumnType("decimal(18,2)");
@@ -105,24 +118,23 @@ namespace Cart.Infrastructure.Persistence
                 entity.Property(ci => ci.UpdatedDate);
 
                 // ÍNDICES PARA PERFORMANCE
-                // Índice en CartId (FK)
                 entity.HasIndex(ci => ci.CartId)
                     .HasDatabaseName("IX_CartItems_CartId");
 
-                // Índice en ProductId para búsquedas rápidas
                 entity.HasIndex(ci => ci.ProductId)
                     .HasDatabaseName("IX_CartItems_ProductId");
 
-                // Índice compuesto único: Un producto por carrito (evita duplicados)
+                // Nuevo índice para CategoryId
+                entity.HasIndex(ci => ci.CategoryId)
+                    .HasDatabaseName("IX_CartItems_CategoryId");
+
                 entity.HasIndex(ci => new { ci.CartId, ci.ProductId })
                     .IsUnique()
                     .HasDatabaseName("IX_CartItems_CartId_ProductId");
 
-                // Índice para consultas por fecha de creación
                 entity.HasIndex(ci => ci.CreatedDate)
                     .HasDatabaseName("IX_CartItems_CreatedDate");
 
-                // Índice compuesto para búsquedas frecuentes
                 entity.HasIndex(ci => new { ci.CartId, ci.CreatedDate })
                     .HasDatabaseName("IX_CartItems_CartId_CreatedDate");
 
@@ -131,13 +143,9 @@ namespace Cart.Infrastructure.Persistence
             });
         }
 
-
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-
             return base.SaveChangesAsync(cancellationToken);
         }
     }
-
-   
 }

@@ -1,8 +1,5 @@
-﻿using Grpc.Core;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
+﻿using Catalog.Infrastructure.SyncDataServices.Grpc;
 using System.Security.Claims;
-using Catalog.Infrastructure.SyncDataServices.Grpc;
 
 namespace Catalog.WebAPI.Middlewares
 {
@@ -14,6 +11,8 @@ namespace Catalog.WebAPI.Middlewares
 
         private static readonly Dictionary<string, HashSet<string>> _publicRoutes = new()
         {
+            ["/api/product/getallproducts"] = new HashSet<string> { "GET" },
+            ["/api/product/getproductbyid"] = new HashSet<string> { "GET" },
             ["/api/category"] = new HashSet<string> { "GET" },
             ["/health"] = new HashSet<string> { "GET" }
         };

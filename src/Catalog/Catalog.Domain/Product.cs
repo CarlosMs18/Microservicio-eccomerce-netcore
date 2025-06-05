@@ -8,9 +8,9 @@ namespace Catalog.Domain
         public string Description { get; set; } = null!;
         public decimal Price { get; set; }
         public Guid CategoryId { get; set; }
-        public Category Category { get; set; }
         public bool IsActive { get; set; }
         public int Stock { get; set; }
-        public ICollection<ProductImage> Images { get; set; }
+        public virtual Category Category { get; set; } = null!;
+        public virtual ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
     }
 }

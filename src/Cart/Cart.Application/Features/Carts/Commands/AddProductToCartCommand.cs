@@ -1,8 +1,10 @@
 ﻿using Cart.Application.Contracts.External;
+using Cart.Application.Contracts.Persistence;
 using Cart.Application.DTos.External;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Shared.Core.Extensions;
 using Shared.Core.Handlers;
 
 namespace Cart.Application.Features.Carts.Commands
@@ -15,15 +17,18 @@ namespace Cart.Application.Features.Carts.Commands
         public class AddProductToCartCommandHandler : BaseHandler, IRequestHandler<AddProductToCartCommand, AddToCartResponse>
         {
             private readonly ICatalogService _catalogService;
+            private readonly IUnitOfWork _unitOfWork;
             private readonly ILogger<AddProductToCartCommandHandler> _logger;
 
             public AddProductToCartCommandHandler(
                 IHttpContextAccessor httpContextAccessor,
                 ICatalogService catalogService,
+                IUnitOfWork unitOfWork,
                 ILogger<AddProductToCartCommandHandler> logger
                 ) : base(httpContextAccessor)
             {
                 _catalogService = catalogService;
+                _unitOfWork = unitOfWork;
                 _logger = logger;
             }
 
@@ -33,9 +38,24 @@ namespace Cart.Application.Features.Carts.Commands
                 {
                     var productIdString = request.ProductId;
                     var requestedQuantity = request.Quantity;
+                    var currentUserId = UserId; // Usando la propiedad de BaseHandler
 
-                    _logger.LogInformation("🛒 Iniciando proceso para agregar producto {ProductId} con cantidad {Quantity}",
-                        productIdString, requestedQuantity);
+                    // Validación de usuario autenticado
+                    if (string.IsNullOrEmpty(currentUserId))
+                    {
+                        _logger.LogWarning("❌ Usuario no autenticado intentando agregar producto al carrito");
+                        return new AddToCartResponse
+                        {
+                            Success = false,
+                            Message = "Usuario no autenticado",
+                            ProductId = Guid.Empty,
+                            AvailableStock = 0,
+                            RequestedQuantity = requestedQuantity
+                        };
+                    }
+
+                    _logger.LogInformation("🛒 Usuario {UserId} iniciando proceso para agregar producto {ProductId} con cantidad {Quantity}",
+                        currentUserId, productIdString, requestedQuantity);
 
                     // Validar que el ProductId sea un GUID válido
                     if (!Guid.TryParse(productIdString, out var productIdGuid))
@@ -51,9 +71,8 @@ namespace Cart.Application.Features.Carts.Commands
                         };
                     }
 
-                    // 1. Verificar si el producto existe (responsabilidad única)
+                    // 1. Verificar si el producto existe
                     var productExists = await _catalogService.ProductExistsAsync(productIdGuid);
-
                     if (!productExists)
                     {
                         _logger.LogWarning("❌ Producto {ProductId} no existe", productIdGuid);
@@ -67,9 +86,8 @@ namespace Cart.Application.Features.Carts.Commands
                         };
                     }
 
-                    // 2. Verificar stock disponible (responsabilidad única)
+                    // 2. Verificar stock disponible
                     var availableStock = await _catalogService.GetProductStockAsync(productIdGuid);
-
                     if (availableStock < requestedQuantity)
                     {
                         _logger.LogWarning("📦 Stock insuficiente para producto {ProductId}. Stock disponible: {AvailableStock}, Solicitado: {RequestedQuantity}",
@@ -85,9 +103,8 @@ namespace Cart.Application.Features.Carts.Commands
                         };
                     }
 
-                    // 3. Obtener detalles del producto para el carrito (responsabilidad única)
+                    // 3. Obtener detalles del producto
                     var productDetails = await _catalogService.GetProductDetailsAsync(productIdGuid);
-
                     if (productDetails == null)
                     {
                         _logger.LogError("❌ Error: No se pudieron obtener los detalles del producto {ProductId}", productIdGuid);
@@ -101,45 +118,93 @@ namespace Cart.Application.Features.Carts.Commands
                         };
                     }
 
-                    // 4. Crear CartItem con todos los detalles del producto
-                    _logger.LogInformation("✅ Producto {ProductId} validado correctamente. Creando item del carrito...", productIdGuid);
+                    // ==================== PERSISTENCIA CON TRANSACCIÓN AUTOMÁTICA ====================
+                    // 🔥 EF Core maneja la transacción automáticamente - Compatible con Retry Policy
 
-                    var cartItem = new Domain.CartItem
+                    // 4. Obtener o crear el carrito del usuario
+                    var existingCart = await _unitOfWork.CartRepository.GetCartByUserIdAsync(currentUserId);
+
+                    Domain.Cart cart;
+                    if (existingCart == null)
                     {
-                        ProductId = productDetails.Id,
-                        ProductName = productDetails.Name,
-                        ProductDescription = productDetails.Description,
-                        Price = productDetails.Price,
-                        Quantity = requestedQuantity,
-                        // Tomar la primera imagen si existe
-                        ProductImageUrl = productDetails.Images?.FirstOrDefault()?.ImageUrl,
-                        CategoryId = productDetails.Category.Id,
-                        CategoryName = productDetails.Category.Name
-                    };
+                        // Crear nuevo carrito con auditoría
+                        cart = new Domain.Cart
+                        {
+                            Id = Guid.NewGuid(),
+                            Items = new List<Domain.CartItem>()
+                        }.ApplyAudit(currentUserId, isNew: true); // 👈 Aplicar auditoría
 
-                    // Aquí iría la lógica para agregar al carrito
-                    // Por ejemplo: await _cartRepository.AddItemToCartAsync(userId, cartItem);
+                        _unitOfWork.CartRepository.Add(cart);
+                        _logger.LogInformation("🛒 Nuevo carrito creado para usuario {UserId}", currentUserId);
+                    }
+                    else
+                    {
+                        cart = existingCart;
+                        _logger.LogInformation("🛒 Carrito existente encontrado para usuario {UserId}", currentUserId);
+                    }
 
-                    _logger.LogInformation("🎉 CartItem creado: {ProductName} - Cantidad: {Quantity} - Subtotal: {Subtotal}",
-                        cartItem.ProductName, cartItem.Quantity, cartItem.Subtotal);
+                    // 5. Verificar si el producto ya existe en el carrito
+                    var existingCartItem = await _unitOfWork.CartItemRepository
+                        .GetByCartAndProductAsync(cart.Id, productIdGuid);
+
+                    if (existingCartItem != null)
+                    {
+                        // Actualizar cantidad del item existente con auditoría
+                        existingCartItem.Quantity += requestedQuantity;
+                        existingCartItem.ApplyAudit(currentUserId, isNew: false); // 👈 Aplicar auditoría
+                        _unitOfWork.CartItemRepository.Update(existingCartItem);
+
+                        _logger.LogInformation("📦 Cantidad actualizada para producto {ProductId} en carrito. Nueva cantidad: {Quantity}",
+                            productIdGuid, existingCartItem.Quantity);
+                    }
+                    else
+                    {
+                        // 6. Crear nuevo CartItem con auditoría
+                        var cartItem = new Domain.CartItem
+                        {
+                            Id = Guid.NewGuid(),
+                            CartId = cart.Id,
+                            ProductId = productIdGuid,
+                            ProductName = productDetails.Name,
+                            ProductDescription = productDetails.Description,
+                            Price = productDetails.Price,
+                            Quantity = requestedQuantity,
+                            ProductImageUrl = productDetails.Images?.FirstOrDefault()?.ImageUrl,
+                            CategoryId = productDetails.Category.Id,
+                            CategoryName = productDetails.Category.Name,
+                            Cart = cart
+                        }.ApplyAudit(currentUserId, isNew: true); // 👈 Aplicar auditoría
+
+                        _unitOfWork.CartItemRepository.Add(cartItem);
+                        _logger.LogInformation("🎉 Nuevo CartItem creado: {ProductName} - Cantidad: {Quantity} - Subtotal: {Subtotal}",
+                            cartItem.ProductName, cartItem.Quantity, cartItem.Subtotal);
+                    }
+
+                    // 7. Guardar cambios - EF maneja transacción automática (Cart + CartItem)
+                    // ✅ Compatible con RetryPolicy
+                    // ✅ Rollback automático si algo falla
+                    // ✅ Commit automático si todo sale bien
+                    await _unitOfWork.Complete();
+
+                    _logger.LogInformation("✅ Producto agregado al carrito exitosamente para usuario {UserId}", currentUserId);
 
                     return new AddToCartResponse
                     {
                         Success = true,
                         Message = "Producto agregado al carrito exitosamente",
                         ProductId = productIdGuid,
-                        AvailableStock = availableStock, // Usamos el stock que ya obtuvimos
+                        AvailableStock = availableStock,
                         RequestedQuantity = requestedQuantity,
-                        // Información adicional del producto agregado
                         ProductName = productDetails.Name,
-                        ProductImageUrl = cartItem.ProductImageUrl,
-                        Subtotal = cartItem.Subtotal
+                        ProductImageUrl = productDetails.Images?.FirstOrDefault()?.ImageUrl,
+                        Subtotal = productDetails.Price * requestedQuantity
                     };
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "❌ Error inesperado al agregar producto {ProductId} al carrito",
-                        request.ProductId);
+                    // 🔥 EF ya hizo rollback automático de todas las entidades
+                    _logger.LogError(ex, "❌ Error al agregar producto {ProductId} al carrito para usuario {UserId}",
+                        request.ProductId, UserId ?? "Unknown");
 
                     return new AddToCartResponse
                     {

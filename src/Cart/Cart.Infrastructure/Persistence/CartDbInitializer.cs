@@ -31,7 +31,6 @@ namespace Cart.Infrastructure.Persistence
                         Id = Guid.NewGuid(),
                         Items = new List<CartItem>()
                     }.ApplyAudit(systemUserId, isNew: true),
-
                     new Domain.Cart
                     {
                         Id = Guid.NewGuid(),
@@ -42,15 +41,19 @@ namespace Cart.Infrastructure.Persistence
                 await context.Carts.AddRangeAsync(carts);
                 await context.SaveChangesAsync();
 
-                // 2. Crear items de carrito de prueba
+                // 2. Crear items de carrito de prueba con los nuevos campos
                 var cartItems = new List<CartItem>
                 {
                     new CartItem
                     {
                         Id = Guid.NewGuid(),
                         CartId = carts[0].Id,
-                        ProductId = Guid.NewGuid(), // ID de producto ficticio
+                        ProductId = Guid.NewGuid(),
                         ProductName = "Smartphone Premium",
+                        ProductDescription = "Smartphone de última generación con 256GB de almacenamiento",
+                        ProductImageUrl = "https://example.com/images/smartphone.jpg",
+                        CategoryId = Guid.NewGuid(),
+                        CategoryName = "Electrónicos",
                         Price = 899.99m,
                         Quantity = 1
                     }.ApplyAudit(systemUserId, isNew: true),
@@ -59,8 +62,12 @@ namespace Cart.Infrastructure.Persistence
                     {
                         Id = Guid.NewGuid(),
                         CartId = carts[0].Id,
-                        ProductId = Guid.NewGuid(), // ID de producto ficticio
+                        ProductId = Guid.NewGuid(),
                         ProductName = "Laptop Ultradelgada",
+                        ProductDescription = "Laptop profesional con procesador Intel i7 y 16GB RAM",
+                        ProductImageUrl = "https://example.com/images/laptop.jpg",
+                        CategoryId = Guid.NewGuid(),
+                        CategoryName = "Computadoras",
                         Price = 1299.99m,
                         Quantity = 2
                     }.ApplyAudit(systemUserId, isNew: true),
@@ -69,8 +76,12 @@ namespace Cart.Infrastructure.Persistence
                     {
                         Id = Guid.NewGuid(),
                         CartId = carts[1].Id,
-                        ProductId = Guid.NewGuid(), // ID de producto ficticio
+                        ProductId = Guid.NewGuid(),
                         ProductName = "Camiseta Algodón",
+                        ProductDescription = "Camiseta 100% algodón, talla M, color azul",
+                        ProductImageUrl = "https://example.com/images/camiseta.jpg",
+                        CategoryId = Guid.NewGuid(),
+                        CategoryName = "Ropa",
                         Price = 24.99m,
                         Quantity = 3
                     }.ApplyAudit(systemUserId, isNew: true)
