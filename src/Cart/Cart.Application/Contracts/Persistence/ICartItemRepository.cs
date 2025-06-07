@@ -7,5 +7,6 @@ namespace Cart.Application.Contracts.Persistence
     {
         Task<Domain.CartItem?> GetByCartAndProductAsync(Guid cartId, Guid productId);
         Task<IReadOnlyList<Domain.CartItem>> GetItemsByCartIdAsync(Guid cartId);
+        Task<IReadOnlyList<CartItem>> GetByProductIdAsync(Guid productId);
     }
 }

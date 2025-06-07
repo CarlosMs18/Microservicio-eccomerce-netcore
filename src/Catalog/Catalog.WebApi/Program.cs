@@ -149,7 +149,10 @@ try
         }
     }
 
-    // 10. Log de endpoints configurados
+    // 10. Verificación de RabbitMQ
+    await VerifyRabbitMQConnection(app.Services, builder.Configuration, environment);
+
+    // 11. Log de endpoints configurados
     LogEndpointsConfiguration(builder.Configuration, environment, restPort);
 
     Log.Information("✅ Catalog Service listo y ejecutándose");
@@ -172,6 +175,64 @@ static string DetectEnvironment()
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
         return "Docker";
     return "Development";
+}
+
+static async Task VerifyRabbitMQConnection(IServiceProvider services, IConfiguration configuration, string environment)
+{
+    try
+    {
+        Log.Information("🐰 Verificando conexión a RabbitMQ...");
+
+        // Obtener configuración de RabbitMQ
+        var rabbitConfig = configuration.GetSection("RabbitMQ");
+        var rabbitParams = configuration.GetSection("RabbitMQParameters");
+
+        var host = rabbitParams["host"] ?? rabbitConfig["Host"] ?? "localhost";
+        var port = rabbitParams["port"] ?? rabbitConfig["Port"] ?? "5672";
+        var username = rabbitParams["username"] ?? rabbitConfig["Username"] ?? "guest";
+        var virtualHost = rabbitParams["virtualhost"] ?? rabbitConfig["VirtualHost"] ?? "/";
+
+        Log.Information("🔗 Configuración RabbitMQ para {Environment}:", environment);
+        Log.Information("  Host: {Host}:{Port}", host, port);
+        Log.Information("  Username: {Username}", username);
+        Log.Information("  Virtual Host: {VirtualHost}", virtualHost);
+
+        // Intentar crear una conexión de prueba
+        using var scope = services.CreateScope();
+
+        // Si tienes un servicio de RabbitMQ registrado, úsalo aquí
+        // Por ahora, solo loggeamos la configuración
+
+        Log.Information("✅ Configuración RabbitMQ cargada correctamente");
+
+        // Test básico de conectividad usando HttpClient
+        using var httpClient = new HttpClient();
+        httpClient.Timeout = TimeSpan.FromSeconds(5);
+
+        try
+        {
+            var managementUrl = $"http://{host}:15672/api/overview";
+            var response = await httpClient.GetAsync(managementUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Log.Information("✅ RabbitMQ Management API accesible");
+            }
+            else
+            {
+                Log.Warning("⚠️ RabbitMQ Management API respondió con código: {StatusCode}", response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("⚠️ No se pudo conectar al Management API de RabbitMQ: {Message}", ex.Message);
+            Log.Information("ℹ️ Esto es normal si RabbitMQ no tiene el plugin de management habilitado");
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "❌ Error al verificar RabbitMQ: {Message}", ex.Message);
+    }
 }
 
 static void LogEndpointsConfiguration(IConfiguration config, string environment, int restPort)
@@ -201,6 +262,12 @@ static void LogEndpointsConfiguration(IConfiguration config, string environment,
 
         Log.Information("  User Service HTTP: {UserHttpUrl}", userServiceBaseUrl);
         Log.Information("  User Service gRPC: {UserGrpcUrl}", grpcUrl);
+
+        // Log de RabbitMQ
+        var rabbitParams = config.GetSection("RabbitMQParameters");
+        var rabbitHost = rabbitParams["host"] ?? "localhost";
+        var rabbitPort = rabbitParams["port"] ?? "5672";
+        Log.Information("  RabbitMQ: amqp://{Host}:{Port}", rabbitHost, rabbitPort);
     }
     catch (Exception ex)
     {

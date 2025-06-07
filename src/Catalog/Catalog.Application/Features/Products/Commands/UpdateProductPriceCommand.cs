@@ -3,8 +3,10 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using Shared.Core.Handlers;
+using Shared.Core.Events;
 using Shared.Core.Extensions;
 using System.ComponentModel.DataAnnotations;
+using Catalog.Application.Contracts.Messaging;
 
 namespace Catalog.Application.Features.Products.Commands
 {
@@ -32,14 +34,17 @@ namespace Catalog.Application.Features.Products.Commands
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<UpdateProductPriceHandler> _logger;
+        private readonly IEventPublisher _eventPublisher;
 
         public UpdateProductPriceHandler(
             IUnitOfWork unitOfWork,
             ILogger<UpdateProductPriceHandler> logger,
+            IEventPublisher eventPublisher,
             IHttpContextAccessor httpContextAccessor) : base(httpContextAccessor)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
+            _eventPublisher = eventPublisher;
         }
 
         public async Task<UpdateProductPriceResponse> Handle(UpdateProductPriceCommand request, CancellationToken cancellationToken)
@@ -81,6 +86,19 @@ namespace Catalog.Application.Features.Products.Commands
 
                 // Guardar cambios usando Complete del UnitOfWork
                 await _unitOfWork.Complete();
+
+                var priceChangedEvent = new ProductPriceChangedEvent
+                {
+                    ProductId = product.Id,
+                    ProductName = product.Name,
+                    OldPrice = oldPrice,
+                    NewPrice = request.NewPrice,
+                    ChangedAt = DateTime.UtcNow,
+                    ChangedBy = UserId,
+                    CategoryId = product.CategoryId
+                };
+
+                await _eventPublisher.PublishAsync(priceChangedEvent, cancellationToken);
 
                 _logger.LogInformation($"Precio actualizado para producto {request.ProductId}: {oldPrice} -> {request.NewPrice} por usuario {UserId}");
 

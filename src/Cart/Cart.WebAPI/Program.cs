@@ -47,7 +47,7 @@ try
 
     // 4. Configuración de puerto REST
     var portsConfig = builder.Configuration.GetSection("Ports");
-    var restPort = portsConfig.GetValue<int>("Rest", 7205); // Puerto diferente para Cart
+    var restPort = portsConfig.GetValue<int>("Rest", 5218); // Puerto según tu configuración
 
     // 5. Registro de servicios (toda la configuración técnica ahora está en Infrastructure)
     builder.Services.AddControllers();
@@ -139,7 +139,10 @@ try
         }
     }
 
-    // 10. Log de endpoints configurados
+    // 10. Verificación de RabbitMQ
+    await VerifyRabbitMQConnection(app.Services, builder.Configuration, environment);
+
+    // 11. Log de endpoints configurados
     LogEndpointsConfiguration(builder.Configuration, environment, restPort);
 
     Log.Information("✅ Cart Service listo y ejecutándose");
@@ -164,6 +167,64 @@ static string DetectEnvironment()
     return "Development";
 }
 
+static async Task VerifyRabbitMQConnection(IServiceProvider services, IConfiguration configuration, string environment)
+{
+    try
+    {
+        Log.Information("🐰 Verificando conexión a RabbitMQ...");
+
+        // Obtener configuración de RabbitMQ
+        var rabbitConfig = configuration.GetSection("RabbitMQ");
+        var rabbitParams = configuration.GetSection("RabbitMQParameters");
+
+        var host = rabbitParams["host"] ?? rabbitConfig["Host"] ?? "localhost";
+        var port = rabbitParams["port"] ?? rabbitConfig["Port"] ?? "5672";
+        var username = rabbitParams["username"] ?? rabbitConfig["Username"] ?? "guest";
+        var virtualHost = rabbitParams["virtualhost"] ?? rabbitConfig["VirtualHost"] ?? "/";
+
+        Log.Information("🔗 Configuración RabbitMQ para {Environment}:", environment);
+        Log.Information("  Host: {Host}:{Port}", host, port);
+        Log.Information("  Username: {Username}", username);
+        Log.Information("  Virtual Host: {VirtualHost}", virtualHost);
+
+        // Intentar crear una conexión de prueba
+        using var scope = services.CreateScope();
+
+        // Si tienes un servicio de RabbitMQ registrado, úsalo aquí
+        // Por ahora, solo loggeamos la configuración
+
+        Log.Information("✅ Configuración RabbitMQ cargada correctamente");
+
+        // Test básico de conectividad usando HttpClient
+        using var httpClient = new HttpClient();
+        httpClient.Timeout = TimeSpan.FromSeconds(5);
+
+        try
+        {
+            var managementUrl = $"http://{host}:15672/api/overview";
+            var response = await httpClient.GetAsync(managementUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Log.Information("✅ RabbitMQ Management API accesible");
+            }
+            else
+            {
+                Log.Warning("⚠️ RabbitMQ Management API respondió con código: {StatusCode}", response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning("⚠️ No se pudo conectar al Management API de RabbitMQ: {Message}", ex.Message);
+            Log.Information("ℹ️ Esto es normal si RabbitMQ no tiene el plugin de management habilitado");
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "❌ Error al verificar RabbitMQ: {Message}", ex.Message);
+    }
+}
+
 static void LogEndpointsConfiguration(IConfiguration config, string environment, int restPort)
 {
     try
@@ -173,24 +234,46 @@ static void LogEndpointsConfiguration(IConfiguration config, string environment,
         var serverName = connectionParams["server"] ?? "Unknown";
 
         Log.Information("🗃️ DB para {Environment}: {Database} en {Server}", environment, databaseName, serverName);
+
         Log.Information("🌐 Endpoints configurados:");
         Log.Information("  REST API: http://localhost:{Port}/api/v1/", restPort);
 
-        // ✅ CORRECTO - Lee desde Microservices:User
-        var userConfig = config.GetSection("Microservices:User");
-        var userHost = userConfig["host"] ?? "localhost";
-        var userPort = userConfig["port"] ?? "5003";
-        var grpcTemplate = config["Microservices:User:GrpcTemplate"] ?? "http://{host}:{port}";
-        var userGrpcUrl = grpcTemplate.Replace("{host}", userHost).Replace("{port}", userPort);
+        // Log de configuración de servicios externos
+        var microservicesConfig = config.GetSection("Microservices");
 
-        // ✅ CORRECTO - Lee desde Microservices:Catalog
-        var catalogConfig = config.GetSection("Microservices:Catalog");
-        var catalogHost = catalogConfig["host"] ?? "localhost";
-        var catalogPort = catalogConfig["port"] ?? "7204";
-        var catalogGrpcUrl = grpcTemplate.Replace("{host}", catalogHost).Replace("{port}", catalogPort);
+        // User Service
+        var userConfig = microservicesConfig.GetSection("User");
+        var userHttpTemplate = userConfig["HttpTemplate"] ?? "http://{host}/api/User/";
+        var userGrpcTemplate = userConfig["GrpcTemplate"] ?? "http://{host}:{port}";
 
-        Log.Information("  User Service gRPC: {UserGrpcUrl}", userGrpcUrl);
-        Log.Information("  Catalog Service gRPC: {CatalogGrpcUrl}", catalogGrpcUrl);
+        // Catalog Service
+        var catalogConfig = microservicesConfig.GetSection("Catalog");
+        var catalogHttpTemplate = catalogConfig["HttpTemplate"] ?? "http://{host}/api/Catalog/";
+        var catalogGrpcTemplate = catalogConfig["GrpcTemplate"] ?? "http://{host}:{port}";
+
+        // Para development, usar parámetros específicos si existen
+        var serviceParams = config.GetSection("ServiceParameters");
+        var host = serviceParams["host"] ?? "localhost";
+        var userPort = serviceParams["port"] ?? "5003";
+        var catalogPort = "7204"; // Puerto por defecto del Catalog según tu configuración
+
+        var userServiceHttpUrl = userHttpTemplate.Replace("{host}", host);
+        var userServiceGrpcUrl = userGrpcTemplate.Replace("{host}", host).Replace("{port}", userPort);
+        var catalogServiceHttpUrl = catalogHttpTemplate.Replace("{host}", host);
+        var catalogServiceGrpcUrl = catalogGrpcTemplate.Replace("{host}", host).Replace("{port}", catalogPort);
+
+        Log.Information("  User Service HTTP: {UserHttpUrl}", userServiceHttpUrl);
+        Log.Information("  User Service gRPC: {UserGrpcUrl}", userServiceGrpcUrl);
+        Log.Information("  Catalog Service HTTP: {CatalogHttpUrl}", catalogServiceHttpUrl);
+        Log.Information("  Catalog Service gRPC: {CatalogGrpcUrl}", catalogServiceGrpcUrl);
+
+        // Log de RabbitMQ
+        var rabbitParams = config.GetSection("RabbitMQParameters");
+        var rabbitConfig = config.GetSection("RabbitMQ");
+        var rabbitHost = rabbitParams["host"] ?? rabbitConfig["Host"] ?? "localhost";
+        var rabbitPort = rabbitParams["port"] ?? rabbitConfig["Port"] ?? "5672";
+        Log.Information("  RabbitMQ: amqp://{Host}:{Port}", rabbitHost, rabbitPort);
+
         Log.Information("  Health Check: http://localhost:{Port}/health", restPort);
     }
     catch (Exception ex)

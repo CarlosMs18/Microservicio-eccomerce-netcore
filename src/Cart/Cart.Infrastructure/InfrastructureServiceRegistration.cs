@@ -1,7 +1,9 @@
 ﻿using Cart.Application.Contracts.Persistence;
+using Cart.Infrastructure.BackgroundServices;
 using Cart.Infrastructure.Extensions;
 using Cart.Infrastructure.Persistence;
 using Cart.Infrastructure.Repositories;
+using Cart.Infrastructure.Services.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +33,7 @@ namespace Cart.Infrastructure
             //ConfigureGrpcClients(services, configuration);
             services.AddCartGrpcClients(configuration);
 
+            RegisterMessagingServices(services, configuration, environment);
             return services;
         }
 
@@ -185,6 +188,19 @@ namespace Cart.Infrastructure
             services.AddScoped(typeof(IAsyncRepository<>), typeof(RepositoryBase<>));
         }
 
+
+        private static void RegisterMessagingServices(IServiceCollection services, IConfiguration configuration, string environment)
+        {
+            // 1. Configuración de RabbitMQ
+            var rabbitConfig = RabbitMQConfiguration.BuildFromConfiguration(configuration, environment);
+            services.AddSingleton(rabbitConfig);
+
+            // 2. Consumers
+            services.AddScoped<ProductPriceChangedConsumer>();
+
+            // 3. Background Service
+            services.AddHostedService<RabbitMQConsumerHostedService>();
+        }
         //private static void ConfigureGrpcClients(
         //    IServiceCollection services,
         //    IConfiguration configuration)

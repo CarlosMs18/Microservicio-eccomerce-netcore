@@ -6,7 +6,7 @@ namespace Cart.Application.Contracts.Persistence
     public interface IAsyncRepository<T> where T : BaseAuditableEntity
     {
         Task<IReadOnlyList<T>> GetAsync();
-        Task<T> GetByIdAsync(string id);
+        Task<T> GetByIdAsync(Guid id);
         Task<IReadOnlyList<T>> GetAsync(Expression<Func<T, bool>> predicate);
         Task<IReadOnlyList<T>> GetAsync(
             Expression<Func<T, bool>> predicate = null,

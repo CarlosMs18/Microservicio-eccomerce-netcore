@@ -31,6 +31,10 @@ namespace Cart.Infrastructure.Persistence
                     .IsRequired()
                     .HasMaxLength(100);
 
+                entity.Property(c => c.TotalAmount)
+                    .IsRequired()
+                    .HasColumnType("decimal(18,2)")
+                    .HasDefaultValue(0.00m);
                 entity.Property(c => c.CreatedDate)
                     .IsRequired()
                     .HasDefaultValueSql("GETUTCDATE()");
@@ -56,6 +60,8 @@ namespace Cart.Infrastructure.Persistence
                     .HasForeignKey(ci => ci.CartId)
                     .OnDelete(DeleteBehavior.Cascade);
 
+                entity.HasIndex(c => c.TotalAmount)
+                    .HasDatabaseName("IX_Carts_TotalAmount");
                 // Nombre de tabla
                 entity.ToTable("Carts");
             });
@@ -137,6 +143,7 @@ namespace Cart.Infrastructure.Persistence
 
                 entity.HasIndex(ci => new { ci.CartId, ci.CreatedDate })
                     .HasDatabaseName("IX_CartItems_CartId_CreatedDate");
+
 
                 // Nombre de tabla
                 entity.ToTable("CartItems");

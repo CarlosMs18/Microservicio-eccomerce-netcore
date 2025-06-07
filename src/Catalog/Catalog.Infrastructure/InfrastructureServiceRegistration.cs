@@ -1,4 +1,5 @@
 ﻿using Catalog.Application.Contracts.Persistence;
+using Catalog.Infrastructure.Extensions;
 using Catalog.Infrastructure.Persistence;
 using Catalog.Infrastructure.Repositories;
 using Catalog.Infrastructure.Services.External.Grpc;
@@ -36,6 +37,8 @@ namespace Catalog.Infrastructure
             // 4. Configuración completa de gRPC (Cliente + Servidor)
             ConfigureGrpcServices(services, configuration);
 
+            // 5. Configuración de RabbitMQ
+            services.AddRabbitMQMessaging(configuration, environment);
             return services;
         }
 
