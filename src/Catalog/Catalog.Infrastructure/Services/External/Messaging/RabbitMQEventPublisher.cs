@@ -43,6 +43,7 @@ namespace Catalog.Infrastructure.Services.External.Messaging
 
         public async Task PublishAsync<T>(T eventMessage, CancellationToken cancellationToken = default) where T : class
         {
+            Console.WriteLine("LLAMANDO AL PUBLISASYNC");
             if (_disposed)
                 throw new ObjectDisposedException(nameof(RabbitMQEventPublisher));
 
@@ -99,9 +100,28 @@ namespace Catalog.Infrastructure.Services.External.Messaging
 
         private static string GenerateRoutingKey(string eventName)
         {
+            // Mapeo específico para eventos siguiendo convenciones estándar
+            var routingKeyMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "ProductPriceChangedEvent", "catalog.product.updated" },
+                { "ProductCreatedEvent", "catalog.product.created" },
+                { "ProductDeletedEvent", "catalog.product.deleted" },
+                { "ProductUpdatedEvent", "catalog.product.updated" },
+                { "CategoryCreatedEvent", "catalog.category.created" },
+                { "CategoryUpdatedEvent", "catalog.category.updated" },
+                { "CategoryDeletedEvent", "catalog.category.deleted" }
+            };
+
+            // Si existe un mapeo específico, usarlo (mejor práctica)
+            if (routingKeyMap.TryGetValue(eventName, out var routingKey))
+            {
+                return routingKey;
+            }
+
+            // Fallback para eventos no mapeados
             return eventName.ToLowerInvariant()
                 .Replace("event", "")
-                .Replace("changed", "changed")
+                .Replace("changed", "updated")
                 .Replace("updated", "updated")
                 .Replace("created", "created")
                 .Replace("deleted", "deleted")
