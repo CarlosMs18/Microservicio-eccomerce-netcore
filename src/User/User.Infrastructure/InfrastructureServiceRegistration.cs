@@ -3,21 +3,20 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Polly;
-using Shared.Core.Interfaces;
 using Shared.Infrastructure.Extensions;
 using Shared.Infrastructure.Interfaces;
-using System.Net.Http;
 using System.Reflection;
 using User.Application.Contracts.Persistence;
 using User.Application.Contracts.Services;
 using User.Application.Models;
+using User.Infrastructure.Configuration;
 using User.Infrastructure.Persistence;
 using User.Infrastructure.Repositories;
 using User.Infrastructure.Services.External.Grpc;
 using User.Infrastructure.Services.Internal;
-using User.Infrastructure.Services.External.Grpc.Interceptors; // Asegúrate de tener esta referencia
+using User.Infrastructure.Services.External.Grpc.Interceptors;
 using Grpc.AspNetCore.Server;
+using Shared.Core.Interfaces;
 
 namespace User.Infrastructure
 {
@@ -28,16 +27,23 @@ namespace User.Infrastructure
             IConfiguration configuration,
             string environment)
         {
-            // 1. Configuración de la base de datos
-            ConfigureDatabase(services, configuration, environment);
+            // 1. Configuración centralizada
+            var userConfig = EnvironmentConfigurationProvider.GetConfiguration(configuration, environment);
+            services.AddSingleton(userConfig);
 
-            // 2. Políticas de resiliencia
+            // 2. Configuración de la base de datos
+            ConfigureDatabase(services, userConfig, environment);
+
+            // 3. Políticas de resiliencia
             services.AddResiliencePolicies();
 
-            // 3. Registro de servicios
+            // 4. Registro de repositorios
+            RegisterRepositories(services);
+
+            // 5. Servicios de aplicación
             RegisterApplicationServices(services, configuration);
 
-            // 4. Configuración de servicios gRPC
+            // 6. Configuración de servicios gRPC
             ConfigureGrpcServices(services, configuration);
 
             return services;
@@ -45,21 +51,19 @@ namespace User.Infrastructure
 
         private static void ConfigureDatabase(
             IServiceCollection services,
-            IConfiguration configuration,
+            UserConfiguration userConfig,
             string environment)
         {
-            var connectionString = GetConnectionString(configuration, environment);
-
             services.AddDbContext<UserIdentityDbContext>((provider, options) =>
             {
                 var logger = provider.GetRequiredService<ILogger<UserIdentityDbContext>>();
 
-                options.UseSqlServer(connectionString, sqlOptions =>
+                options.UseSqlServer(userConfig.ConnectionString, sqlOptions =>
                 {
                     sqlOptions.MigrationsAssembly(typeof(UserIdentityDbContext).Assembly.FullName);
                     sqlOptions.EnableRetryOnFailure(
-                        maxRetryCount: 5,
-                        maxRetryDelay: TimeSpan.FromSeconds(30),
+                        maxRetryCount: userConfig.Database.MaxRetryCount,
+                        maxRetryDelay: TimeSpan.FromSeconds(userConfig.Database.MaxRetryDelaySeconds),
                         errorNumbersToAdd: null);
                 });
 
@@ -72,111 +76,8 @@ namespace User.Infrastructure
             });
         }
 
-        private static string GetConnectionString(IConfiguration configuration, string environment)
+        private static void RegisterRepositories(IServiceCollection services)
         {
-            try
-            {
-                var connectionParams = configuration.GetSection("ConnectionParameters");
-                var poolingParams = configuration.GetSection("ConnectionPooling");
-                var templates = configuration.GetSection("ConnectionTemplates");
-
-                string template;
-                var parameters = new Dictionary<string, string>();
-
-                // Parámetros comunes de pooling (con valores por defecto)
-                var commonPoolingParams = new Dictionary<string, string>
-                {
-                    ["pooling"] = poolingParams["pooling"] ?? "true",
-                    ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100",
-                    ["minPoolSize"] = poolingParams["minPoolSize"] ?? "5",
-                    ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30",
-                    ["commandTimeout"] = poolingParams["commandTimeout"] ?? "30"
-                };
-
-                switch (environment)
-                {
-                    case "Development":
-                        template = templates["Local"] ?? throw new InvalidOperationException("Template Local no encontrado");
-                        parameters = new Dictionary<string, string>
-                        {
-                            ["server"] = connectionParams["server"] ?? "(localdb)\\mssqllocaldb",
-                            ["database"] = configuration["User:DatabaseName"] ?? "UserDB_Dev",
-                            ["trusted"] = connectionParams["trusted"] ?? "true"
-                        };
-                        // Agregar parámetros de pooling
-                        foreach (var poolParam in commonPoolingParams)
-                        {
-                            parameters[poolParam.Key] = poolParam.Value;
-                        }
-                        break;
-
-                    case "Docker":
-                        template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
-                        parameters = new Dictionary<string, string>
-                        {
-                            ["server"] = connectionParams["server"] ?? "host.docker.internal,1433",
-                            ["database"] = configuration["User:DatabaseName"] ?? "UserDB_Dev",
-                            ["user"] = connectionParams["user"] ?? "sa",
-                            ["password"] = connectionParams["password"] ?? throw new InvalidOperationException("Password requerido para Docker"),
-                            ["trust"] = connectionParams["trust"] ?? "true"
-                        };
-                        // Agregar parámetros de pooling
-                        foreach (var poolParam in commonPoolingParams)
-                        {
-                            parameters[poolParam.Key] = poolParam.Value;
-                        }
-                        break;
-
-                    case "Kubernetes":
-                        template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
-                        var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
-
-                        if (string.IsNullOrEmpty(dbPassword))
-                        {
-                            throw new InvalidOperationException("Variable de entorno DB_PASSWORD no encontrada para Kubernetes");
-                        }
-
-                        parameters = new Dictionary<string, string>
-                        {
-                            ["server"] = connectionParams["server"] ?? throw new InvalidOperationException("Server no configurado para Kubernetes"),
-                            ["database"] = configuration["User:DatabaseName"] ?? "UserDB_Dev",
-                            ["user"] = connectionParams["user"] ?? "sa",
-                            ["password"] = dbPassword,
-                            ["trust"] = connectionParams["trust"] ?? "true"
-                        };
-                        // Agregar parámetros de pooling específicos para Kubernetes (más conservadores)
-                        parameters["pooling"] = poolingParams["pooling"] ?? "true";
-                        parameters["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "50"; // Más conservador en K8s
-                        parameters["minPoolSize"] = poolingParams["minPoolSize"] ?? "2";
-                        parameters["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30";
-                        parameters["commandTimeout"] = poolingParams["commandTimeout"] ?? "60"; // Más tiempo en K8s
-                        break;
-
-                    default:
-                        throw new InvalidOperationException($"Entorno '{environment}' no soportado");
-                }
-
-                var connectionString = parameters.Aggregate(template, (current, param) =>
-                    current.Replace($"{{{param.Key}}}", param.Value));
-
-                if (string.IsNullOrEmpty(connectionString))
-                {
-                    throw new InvalidOperationException("Cadena de conexión no puede estar vacía");
-                }
-
-                return connectionString;
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Error al construir connection string para {environment}: {ex.Message}", ex);
-            }
-        }
-
-        private static void RegisterApplicationServices(
-            IServiceCollection services,
-            IConfiguration configuration)
-        {
-            // 1. Configuración de UnitOfWork y repositorios
             services.AddScoped<IUnitOfWork>(provider =>
                 new UnitOfWork(
                     provider.GetRequiredService<UserIdentityDbContext>(),
@@ -189,13 +90,13 @@ namespace User.Infrastructure
                     provider.GetRequiredService<IRepositoryResilience>().DbRetryPolicy));
 
             services.AddScoped(typeof(IAsyncRepository<>), typeof(RepositoryBase<>));
+        }
 
-            // 2. Configuración de HttpClient con políticas de resiliencia
-            services.AddHttpClient<IExternalAuthService, ExternalAuthService>()
-                .AddResiliencePolicies(provider =>
-                    provider.GetRequiredService<IRepositoryResilience>());
-
-            // 3. Configuración de Identity
+        private static void RegisterApplicationServices(
+            IServiceCollection services,
+            IConfiguration configuration)
+        {
+            // Configuración de Identity
             services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
             {
                 ConfigureIdentityOptions(options);
@@ -203,13 +104,13 @@ namespace User.Infrastructure
             .AddEntityFrameworkStores<UserIdentityDbContext>()
             .AddDefaultTokenProviders();
 
-            // 4. Configuración JWT (usando configuración fuertemente tipada)
+            // Configuración JWT
             services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
 
-            // 5. Servicios de aplicación
+            // Servicios de aplicación
             services.AddScopedServices();
 
-            // 6. AutoMapper
+            // AutoMapper
             services.AddAutoMapper(Assembly.GetExecutingAssembly());
         }
 
@@ -217,34 +118,22 @@ namespace User.Infrastructure
             IServiceCollection services,
             IConfiguration configuration)
         {
-            // 1. Configuración base de gRPC Server
             services.AddGrpc(options =>
             {
-                // Opciones recomendadas para producción
-                options.EnableDetailedErrors = configuration.GetValue<bool>("Grpc:EnableDetailedErrors", true); // true para User service por defecto
-                options.MaxReceiveMessageSize = configuration.GetValue<int>("Grpc:MaxMessageSizeMB", 16) * 1024 * 1024; // 16MB por defecto para User
+                options.EnableDetailedErrors = configuration.GetValue<bool>("Grpc:EnableDetailedErrors", true);
+                options.MaxReceiveMessageSize = configuration.GetValue<int>("Grpc:MaxMessageSizeMB", 16) * 1024 * 1024;
                 options.IgnoreUnknownServices = true;
-
-                // Interceptores
                 options.Interceptors.Add<ExceptionInterceptor>();
             });
 
-            // 2. Registro del servicio gRPC específico (AuthGrpcService)
             services.AddScoped<AuthGrpcService>();
-
-            // 3. Registro del interceptor como Singleton
             services.AddSingleton<ExceptionInterceptor>();
 
-            // 4. Configuración avanzada
             services.Configure<GrpcServiceOptions>(options =>
             {
                 options.EnableDetailedErrors = configuration.GetValue<bool>("Grpc:EnableDetailedErrors", true);
                 options.ResponseCompressionLevel = System.IO.Compression.CompressionLevel.Optimal;
             });
-
-            // 5. Health Checks para gRPC (opcional pero recomendado para User service)
-            // services.AddGrpcHealthChecks()
-            //        .AddCheck("auth_grpc", () => HealthCheckResult.Healthy("User Auth gRPC service is healthy"));
         }
 
         private static void ConfigureIdentityOptions(IdentityOptions options)
@@ -275,22 +164,11 @@ namespace User.Infrastructure
     // Extensiones adicionales para mejor organización
     public static class InfrastructureExtensions
     {
-        public static IHttpClientBuilder AddResiliencePolicies(
-            this IHttpClientBuilder builder,
-            Func<IServiceProvider, IRepositoryResilience> resilienceProvider)
-        {
-            return builder
-                .AddPolicyHandler((services, request) => resilienceProvider(services).HttpRetryPolicy)
-                .AddPolicyHandler((services, request) => resilienceProvider(services).HttpCircuitBreaker)
-                .AddPolicyHandler(Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(30)));
-        }
-
         public static IServiceCollection AddScopedServices(this IServiceCollection services)
         {
             return services
                 .AddScoped<IAuthService, AuthService>()
-                .AddScoped<IHealthChecker, HealthChecker>()
-                .AddScoped<IExternalAuthService, ExternalAuthService>(); // cuando usaba http para el token
+                .AddScoped<IHealthChecker, HealthChecker>();
         }
     }
 }

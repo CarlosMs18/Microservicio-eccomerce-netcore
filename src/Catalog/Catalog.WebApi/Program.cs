@@ -1,10 +1,8 @@
 ﻿using Catalog.Application;
 using Catalog.Infrastructure;
-using Catalog.Infrastructure.Persistence;
-using Catalog.Infrastructure.Services.External.Grpc;
+using Catalog.Infrastructure.Extensions;
 using Catalog.WebAPI.Middlewares;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
-using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
@@ -21,139 +19,23 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
-    // 1. Detección de entorno
+    // 1. Configuración básica
     var environment = DetectEnvironment();
-    Log.Information("🔧 Entorno detectado: {Environment}", environment);
+    ConfigureAppSettings(builder, environment);
+    ConfigureSerilog(builder, environment);
 
-    // 2. Carga de configuración
-    builder.Configuration
-        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-        .AddJsonFile($"appsettings.{environment}.json", optional: true)
-        .AddEnvironmentVariables();
+    // 2. Servicios
+    var (restPort, grpcPort) = ConfigureServices(builder, environment);
 
-    // 3. Configuración de Serilog
-    builder.Host.UseSerilog((ctx, services, config) =>
-    {
-        config.MinimumLevel.Information()
-              .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-              .MinimumLevel.Override("System", LogEventLevel.Warning)
-              .Enrich.FromLogContext()
-              .WriteTo.Async(a => a.Console())
-              .WriteTo.Async(a => a.File(
-                  new CompactJsonFormatter(),
-                  $"logs/{environment.ToLower()}-log-.json",
-                  rollingInterval: RollingInterval.Day,
-                  retainedFileCountLimit: 15));
-    });
-
-    // 4. Configuración de puerto REST
-    var portsConfig = builder.Configuration.GetSection("Ports");
-    var restPort = portsConfig.GetValue<int>("Rest", 7204);
-    var grpcPort = portsConfig.GetValue<int>("Grpc", 7205);
-
-    // 5. Registro de servicios (toda la configuración técnica ahora está en Infrastructure)
-    builder.Services.AddControllers();
-    builder.Services.AddHttpContextAccessor();
-    builder.Services.AddApplicationServices();
-    builder.Services.AddInfrastructureServices(builder.Configuration, environment);
-
-    // 6. Configuración de Swagger solo para desarrollo
-    if (environment == "Development")
-    {
-        builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen(c =>
-        {
-            c.SwaggerDoc("v1", new() { Title = "Catalog API", Version = "v1" });
-        });
-    }
-
-    // 7. Configuración de Kestrel (solo HTTP REST)
-    builder.WebHost.ConfigureKestrel(options =>
-    {
-        options.ListenAnyIP(restPort, listenOptions =>
-        {
-            listenOptions.Protocols = HttpProtocols.Http1;
-            Log.Debug("🌐 HTTP REST configurado en puerto {Port}", restPort);
-        });
-        options.ListenAnyIP(grpcPort, listenOptions =>
-        {
-            listenOptions.Protocols = HttpProtocols.Http2;
-            Log.Debug("📡 gRPC configurado en puerto {Port}", grpcPort);
-        });
-    });
-
+    // 3. App pipeline
     var app = builder.Build();
+    ConfigureMiddleware(app, environment);
 
-    // 8. Middleware pipeline
-    if (environment == "Development")
-    {
-        app.UseSwagger();
-        app.UseSwaggerUI(c =>
-        {
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Catalog v1");
-            c.DisplayRequestDuration();
-        });
-    }
+    // 4. Inicialización
+    await app.Services.EnsureDatabaseAsync(environment);
+    await app.Services.VerifyRabbitMQAsync(builder.Configuration, environment);
 
-    app.UseHttpsRedirection();
-    app.UseRouting();
-    app.UseMiddleware<TokenGrpcValidationMiddleware>();
-    app.UseAuthorization();
-    app.MapControllers();
-    app.UseMiddleware<ExceptionMiddleware>();
-    app.UseSerilogRequestLogging();
-
-    // Mapear servicio gRPC
-    app.MapGrpcService<CatalogGrpcService>();
-
-    // 9. Migraciones de BD
-    if (environment is "Development" or "Docker" or "Kubernetes")
-    {
-        using var scope = app.Services.CreateScope();
-        var services = scope.ServiceProvider;
-
-        var retryCount = 0;
-        const int maxRetries = 10;
-
-        while (retryCount < maxRetries)
-        {
-            try
-            {
-                var db = services.GetRequiredService<CatalogDbContext>();
-
-                Log.Information("🔄 Creando/migrando base de datos...");
-                await db.Database.MigrateAsync();
-
-                Log.Information("📊 Inicializando datos...");
-                await CatalogDbInitializer.InitializeAsync(db);
-
-                Log.Information("🆗 Base de datos lista");
-                break;
-            }
-            catch (Exception ex)
-            {
-                retryCount++;
-                Log.Warning(ex, "❌ Intento {Retry}/{MaxRetries} - Error: {Message}",
-                    retryCount, maxRetries, ex.Message);
-
-                if (retryCount >= maxRetries)
-                {
-                    Log.Fatal(ex, "❌ Error crítico con BD después de {MaxRetries} intentos", maxRetries);
-                    throw;
-                }
-
-                var delaySeconds = 5 * retryCount;
-                Log.Information("⏳ Reintentando en {Delay} segundos...", delaySeconds);
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
-            }
-        }
-    }
-
-    // 10. Verificación de RabbitMQ
-    await VerifyRabbitMQConnection(app.Services, builder.Configuration, environment);
-
-    // 11. Log de endpoints configurados
-    LogEndpointsConfiguration(builder.Configuration, environment, restPort);
+    builder.Configuration.LogEndpointsConfiguration(environment, restPort, grpcPort);
 
     Log.Information("✅ Catalog Service listo y ejecutándose");
     await app.RunAsync();
@@ -177,100 +59,99 @@ static string DetectEnvironment()
     return "Development";
 }
 
-static async Task VerifyRabbitMQConnection(IServiceProvider services, IConfiguration configuration, string environment)
+static void ConfigureAppSettings(WebApplicationBuilder builder, string environment)
 {
-    try
-    {
-        Log.Information("🐰 Verificando conexión a RabbitMQ...");
+    Log.Information("🔧 Entorno detectado: {Environment}", environment);
 
-        // Obtener configuración de RabbitMQ
-        var rabbitConfig = configuration.GetSection("RabbitMQ");
-        var rabbitParams = configuration.GetSection("RabbitMQParameters");
-
-        var host = rabbitParams["host"] ?? rabbitConfig["Host"] ?? "localhost";
-        var port = rabbitParams["port"] ?? rabbitConfig["Port"] ?? "5672";
-        var username = rabbitParams["username"] ?? rabbitConfig["Username"] ?? "guest";
-        var virtualHost = rabbitParams["virtualhost"] ?? rabbitConfig["VirtualHost"] ?? "/";
-
-        Log.Information("🔗 Configuración RabbitMQ para {Environment}:", environment);
-        Log.Information("  Host: {Host}:{Port}", host, port);
-        Log.Information("  Username: {Username}", username);
-        Log.Information("  Virtual Host: {VirtualHost}", virtualHost);
-
-        // Intentar crear una conexión de prueba
-        using var scope = services.CreateScope();
-
-        // Si tienes un servicio de RabbitMQ registrado, úsalo aquí
-        // Por ahora, solo loggeamos la configuración
-
-        Log.Information("✅ Configuración RabbitMQ cargada correctamente");
-
-        // Test básico de conectividad usando HttpClient
-        using var httpClient = new HttpClient();
-        httpClient.Timeout = TimeSpan.FromSeconds(5);
-
-        try
-        {
-            var managementUrl = $"http://{host}:15672/api/overview";
-            var response = await httpClient.GetAsync(managementUrl);
-
-            if (response.IsSuccessStatusCode)
-            {
-                Log.Information("✅ RabbitMQ Management API accesible");
-            }
-            else
-            {
-                Log.Warning("⚠️ RabbitMQ Management API respondió con código: {StatusCode}", response.StatusCode);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Warning("⚠️ No se pudo conectar al Management API de RabbitMQ: {Message}", ex.Message);
-            Log.Information("ℹ️ Esto es normal si RabbitMQ no tiene el plugin de management habilitado");
-        }
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "❌ Error al verificar RabbitMQ: {Message}", ex.Message);
-    }
+    builder.Configuration
+        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+        .AddJsonFile($"appsettings.{environment}.json", optional: true)
+        .AddEnvironmentVariables();
 }
 
-static void LogEndpointsConfiguration(IConfiguration config, string environment, int restPort)
+static void ConfigureSerilog(WebApplicationBuilder builder, string environment)
 {
-    try
+    builder.Host.UseSerilog((ctx, services, config) =>
     {
-        var connectionParams = config.GetSection("ConnectionParameters");
-        var databaseName = config["Catalog:DatabaseName"] ?? "CatalogDB_Dev";
-        var serverName = connectionParams["server"] ?? "Unknown";
+        config.MinimumLevel.Information()
+              .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+              .MinimumLevel.Override("System", LogEventLevel.Warning)
+              .Enrich.FromLogContext()
+              .WriteTo.Async(a => a.Console())
+              .WriteTo.Async(a => a.File(
+                  new CompactJsonFormatter(),
+                  $"logs/{environment.ToLower()}-log-.json",
+                  rollingInterval: RollingInterval.Day,
+                  retainedFileCountLimit: 15));
+    });
+}
 
-        Log.Information("🗃️ DB para {Environment}: {Database} en {Server}", environment, databaseName, serverName);
+static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder builder, string environment)
+{
+    // Configuración de puertos
+    var portsConfig = builder.Configuration.GetSection("Ports");
+    var restPort = portsConfig.GetValue<int>("Rest", 7204);
+    var grpcPort = portsConfig.GetValue<int>("Grpc", 7205);
 
-        Log.Information("🌐 Endpoints configurados:");
-        Log.Information("  REST API: http://localhost:{Port}/api/v1/", restPort);
+    // Servicios básicos
+    builder.Services.AddControllers();
+    builder.Services.AddHttpContextAccessor();
 
-        // Log de configuración gRPC (leído desde configuración)
-        var microservicesConfig = config.GetSection("Microservices:User");
-        var serviceParams = config.GetSection("ServiceParameters");
+    // Servicios de aplicación e infraestructura
+    builder.Services.AddApplicationServices();
+    builder.Services.AddInfrastructureServices(builder.Configuration, environment);
 
-        var httpTemplate = microservicesConfig["HttpTemplate"] ?? "http://{host}/api/User/";
-        var grpcTemplate = microservicesConfig["GrpcTemplate"] ?? "http://{host}:{port}";
-        var host = serviceParams["host"] ?? "localhost";
-        var port = serviceParams["port"] ?? "5001";
-
-        var userServiceBaseUrl = httpTemplate.Replace("{host}", host);
-        var grpcUrl = grpcTemplate.Replace("{host}", host).Replace("{port}", port);
-
-        Log.Information("  User Service HTTP: {UserHttpUrl}", userServiceBaseUrl);
-        Log.Information("  User Service gRPC: {UserGrpcUrl}", grpcUrl);
-
-        // Log de RabbitMQ
-        var rabbitParams = config.GetSection("RabbitMQParameters");
-        var rabbitHost = rabbitParams["host"] ?? "localhost";
-        var rabbitPort = rabbitParams["port"] ?? "5672";
-        Log.Information("  RabbitMQ: amqp://{Host}:{Port}", rabbitHost, rabbitPort);
-    }
-    catch (Exception ex)
+    // Swagger solo para desarrollo
+    if (environment == "Development")
     {
-        Log.Warning(ex, "Error al mostrar configuración de endpoints");
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen(c =>
+        {
+            c.SwaggerDoc("v1", new() { Title = "Catalog API", Version = "v1" });
+        });
     }
+
+    // Configuración de Kestrel
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(restPort, listenOptions =>
+        {
+            listenOptions.Protocols = HttpProtocols.Http1;
+            Log.Debug("🌐 HTTP REST configurado en puerto {Port}", restPort);
+        });
+
+        options.ListenAnyIP(grpcPort, listenOptions =>
+        {
+            listenOptions.Protocols = HttpProtocols.Http2;
+            Log.Debug("📡 gRPC configurado en puerto {Port}", grpcPort);
+        });
+    });
+
+    return (restPort, grpcPort);
+}
+
+static void ConfigureMiddleware(WebApplication app, string environment)
+{
+    // Swagger solo para desarrollo
+    if (environment == "Development")
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI(c =>
+        {
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Catalog v1");
+            c.DisplayRequestDuration();
+        });
+    }
+
+    app.UseHttpsRedirection();
+    app.UseRouting();
+    app.UseMiddleware<TokenGrpcValidationMiddleware>();
+    app.UseAuthorization();
+    app.MapControllers();
+
+    // Mapear servicio gRPC
+    app.MapGrpcService<Catalog.Infrastructure.Services.External.Grpc.CatalogGrpcService>();
+
+    app.UseMiddleware<ExceptionMiddleware>();
+    app.UseSerilogRequestLogging();
 }

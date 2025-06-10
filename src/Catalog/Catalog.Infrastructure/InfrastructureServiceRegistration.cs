@@ -1,4 +1,5 @@
 ﻿using Catalog.Application.Contracts.Persistence;
+using Catalog.Infrastructure.Configuration;
 using Catalog.Infrastructure.Extensions;
 using Catalog.Infrastructure.Persistence;
 using Catalog.Infrastructure.Repositories;
@@ -25,40 +26,40 @@ namespace Catalog.Infrastructure
             IConfiguration configuration,
             string environment)
         {
-            // 1. Configuración de la base de datos
-            ConfigureDatabase(services, configuration, environment);
+            // 1. Configuración centralizada
+            var catalogConfig = EnvironmentConfigurationProvider.GetConfiguration(configuration, environment);
+            services.AddSingleton(catalogConfig);
 
-            // 2. Políticas de resiliencia
+            // 2. Configuración de la base de datos
+            ConfigureDatabase(services, catalogConfig, environment);
+
+            // 3. Políticas de resiliencia
             services.AddResiliencePolicies();
 
-            // 3. Registro de repositorios
+            // 4. Registro de repositorios
             RegisterRepositories(services);
 
-            // 4. Configuración completa de gRPC (Cliente + Servidor)
-            ConfigureGrpcServices(services, configuration);
+            // 5. Servicios externos
+            ConfigureExternalServices(services, configuration, environment);
 
-            // 5. Configuración de RabbitMQ
-            services.AddRabbitMQMessaging(configuration, environment);
             return services;
         }
 
         private static void ConfigureDatabase(
             IServiceCollection services,
-            IConfiguration configuration,
+            CatalogConfiguration catalogConfig,
             string environment)
         {
-            var connectionString = GetConnectionString(configuration, environment);
-
             services.AddDbContext<CatalogDbContext>((provider, options) =>
             {
                 var logger = provider.GetRequiredService<ILogger<CatalogDbContext>>();
 
-                options.UseSqlServer(connectionString, sqlOptions =>
+                options.UseSqlServer(catalogConfig.ConnectionString, sqlOptions =>
                 {
                     sqlOptions.MigrationsAssembly(typeof(CatalogDbContext).Assembly.FullName);
                     sqlOptions.EnableRetryOnFailure(
-                        maxRetryCount: 5,
-                        maxRetryDelay: TimeSpan.FromSeconds(30),
+                        maxRetryCount: catalogConfig.Database.MaxRetryCount,
+                        maxRetryDelay: TimeSpan.FromSeconds(catalogConfig.Database.MaxRetryDelaySeconds),
                         errorNumbersToAdd: null);
                 });
 
@@ -69,106 +70,6 @@ namespace Catalog.Infrastructure
                     logger.LogDebug("🔍 Habilitados logs detallados de EF Core");
                 }
             });
-        }
-
-        private static string GetConnectionString(IConfiguration configuration, string environment)
-        {
-            try
-            {
-                var connectionParams = configuration.GetSection("ConnectionParameters");
-                var poolingParams = configuration.GetSection("ConnectionPooling");
-                var templates = configuration.GetSection("ConnectionTemplates");
-
-                string template;
-                var parameters = new Dictionary<string, string>();
-
-                // Parámetros comunes de pooling (con valores por defecto)
-                var commonPoolingParams = new Dictionary<string, string>
-                {
-                    ["pooling"] = poolingParams["pooling"] ?? "true",
-                    ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100",
-                    ["minPoolSize"] = poolingParams["minPoolSize"] ?? "5",
-                    ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30",
-                    ["commandTimeout"] = poolingParams["commandTimeout"] ?? "30"
-                };
-
-                switch (environment)
-                {
-                    case "Development":
-                        template = templates["Local"] ?? throw new InvalidOperationException("Template Local no encontrado");
-                        parameters = new Dictionary<string, string>
-                        {
-                            ["server"] = connectionParams["server"] ?? "(localdb)\\mssqllocaldb",
-                            ["database"] = configuration["Catalog:DatabaseName"] ?? "CatalogDB_Dev",
-                            ["trusted"] = connectionParams["trusted"] ?? "true"
-                        };
-                        // Agregar parámetros de pooling
-                        foreach (var poolParam in commonPoolingParams)
-                        {
-                            parameters[poolParam.Key] = poolParam.Value;
-                        }
-                        break;
-
-                    case "Docker":
-                        template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
-                        parameters = new Dictionary<string, string>
-                        {
-                            ["server"] = connectionParams["server"] ?? "host.docker.internal,1433",
-                            ["database"] = configuration["Catalog:DatabaseName"] ?? "CatalogDB_Dev",
-                            ["user"] = connectionParams["user"] ?? "sa",
-                            ["password"] = connectionParams["password"] ?? throw new InvalidOperationException("Password requerido para Docker"),
-                            ["trust"] = connectionParams["trust"] ?? "true"
-                        };
-                        // Agregar parámetros de pooling
-                        foreach (var poolParam in commonPoolingParams)
-                        {
-                            parameters[poolParam.Key] = poolParam.Value;
-                        }
-                        break;
-
-                    case "Kubernetes":
-                        template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
-                        var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
-
-                        if (string.IsNullOrEmpty(dbPassword))
-                        {
-                            throw new InvalidOperationException("Variable de entorno DB_PASSWORD no encontrada para Kubernetes");
-                        }
-
-                        parameters = new Dictionary<string, string>
-                        {
-                            ["server"] = connectionParams["server"] ?? throw new InvalidOperationException("Server no configurado para Kubernetes"),
-                            ["database"] = configuration["Catalog:DatabaseName"] ?? "CatalogDB_Dev",
-                            ["user"] = connectionParams["user"] ?? "sa",
-                            ["password"] = dbPassword,
-                            ["trust"] = connectionParams["trust"] ?? "true"
-                        };
-                        // Agregar parámetros de pooling específicos para Kubernetes (más conservadores)
-                        parameters["pooling"] = poolingParams["pooling"] ?? "true";
-                        parameters["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "50"; // Más conservador en K8s
-                        parameters["minPoolSize"] = poolingParams["minPoolSize"] ?? "2";
-                        parameters["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30";
-                        parameters["commandTimeout"] = poolingParams["commandTimeout"] ?? "60"; // Más tiempo en K8s
-                        break;
-
-                    default:
-                        throw new InvalidOperationException($"Entorno '{environment}' no soportado");
-                }
-
-                var connectionString = parameters.Aggregate(template, (current, param) =>
-                    current.Replace($"{{{param.Key}}}", param.Value));
-
-                if (string.IsNullOrEmpty(connectionString))
-                {
-                    throw new InvalidOperationException("Cadena de conexión no puede estar vacía");
-                }
-
-                return connectionString;
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Error al construir connection string para {environment}: {ex.Message}", ex);
-            }
         }
 
         private static void RegisterRepositories(IServiceCollection services)
@@ -199,20 +100,34 @@ namespace Catalog.Infrastructure
             services.AddScoped(typeof(IAsyncRepository<>), typeof(RepositoryBase<>));
         }
 
-        private static void ConfigureGrpcServices(
-            IServiceCollection services,
-            IConfiguration configuration)
+        private static void ConfigureExternalServices(IServiceCollection services, IConfiguration configuration, string environment)
+        {
+            // gRPC Services (Cliente + Servidor)
+            services.AddCatalogGrpcServices(configuration);
+
+            // RabbitMQ Services
+            services.AddRabbitMQServices(configuration, environment);
+
+            // HTTP Clients (si los tienes)
+            services.AddExternalHttpClients(configuration);
+        }
+    }
+
+    // Extensiones para servicios específicos
+    public static class ExternalServicesExtensions
+    {
+        public static IServiceCollection AddCatalogGrpcServices(this IServiceCollection services, IConfiguration configuration)
         {
             // 1. Configuración de Cliente gRPC (hacia User Service)
             ConfigureGrpcClients(services, configuration);
 
             // 2. Configuración de Servidor gRPC (Catalog Service)
             ConfigureGrpcServer(services, configuration);
+
+            return services;
         }
 
-        private static void ConfigureGrpcClients(
-            IServiceCollection services,
-            IConfiguration configuration)
+        private static void ConfigureGrpcClients(IServiceCollection services, IConfiguration configuration)
         {
             // Obtener configuración para el cliente gRPC
             var microservicesConfig = configuration.GetSection("Microservices:User");
@@ -249,9 +164,7 @@ namespace Catalog.Infrastructure
             services.AddSingleton<IUserGrpcClient, UserGrpcClient>();
         }
 
-        private static void ConfigureGrpcServer(
-            IServiceCollection services,
-            IConfiguration configuration)
+        private static void ConfigureGrpcServer(IServiceCollection services, IConfiguration configuration)
         {
             // Configuración base de gRPC Server
             services.AddGrpc(options =>
@@ -277,10 +190,29 @@ namespace Catalog.Infrastructure
                 options.EnableDetailedErrors = configuration.GetValue<bool>("Grpc:EnableDetailedErrors");
                 options.ResponseCompressionLevel = System.IO.Compression.CompressionLevel.Optimal;
             });
+        }
 
-            // Health Checks para gRPC (opcional)
-            // services.AddGrpcHealthChecks()
-            //        .AddCheck("catalog_grpc", () => HealthCheckResult.Healthy("Catalog gRPC service is healthy"));
+        public static IServiceCollection AddRabbitMQServices(this IServiceCollection services, IConfiguration configuration, string environment)
+        {
+            // Configuración de RabbitMQ usando el mismo patrón que Cart
+            services.AddRabbitMQMessaging(configuration, environment);
+
+            // Consumers específicos de Catalog si los tienes
+            // services.AddScoped<CategoryChangedConsumer>();
+
+            // Background Service si lo necesitas
+            // services.AddHostedService<RabbitMQConsumerHostedService>();
+
+            return services;
+        }
+
+        public static IServiceCollection AddExternalHttpClients(this IServiceCollection services, IConfiguration configuration)
+        {
+            // Aquí puedes agregar HttpClients si los necesitas
+            // services.AddHttpClient<IUserService, UserService>();
+            // services.AddHttpClient<ICartService, CartService>();
+
+            return services;
         }
     }
 }
