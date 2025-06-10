@@ -168,7 +168,8 @@ namespace User.Infrastructure
         {
             return services
                 .AddScoped<IAuthService, AuthService>()
-                .AddScoped<IHealthChecker, HealthChecker>();
+                .AddScoped<IHealthChecker, HealthChecker>()
+                .AddScoped<IExternalAuthService, ExternalAuthService>();
         }
     }
 }
