@@ -122,9 +122,12 @@ namespace Cart.Application.Features.Carts.Commands
                     // 🔥 EF Core maneja la transacción automáticamente - Compatible con Retry Policy
 
                     // 4. Obtener o crear el carrito del usuario
+                    // ✅ CORREGIDO: Sin AsNoTracking para permitir que EF rastree los cambios
                     var existingCart = await _unitOfWork.CartRepository.GetCartByUserIdAsync(currentUserId);
 
                     Domain.Cart cart;
+                    bool isNewCart = false;
+
                     if (existingCart == null)
                     {
                         // Crear nuevo carrito con auditoría
@@ -132,14 +135,17 @@ namespace Cart.Application.Features.Carts.Commands
                         {
                             Id = Guid.NewGuid(),
                             Items = new List<Domain.CartItem>()
-                        }.ApplyAudit(currentUserId, isNew: true); // 👈 Aplicar auditoría
+                        }.ApplyAudit(currentUserId, isNew: true);
 
                         _unitOfWork.CartRepository.Add(cart);
+                        isNewCart = true;
                         _logger.LogInformation("🛒 Nuevo carrito creado para usuario {UserId}", currentUserId);
                     }
                     else
                     {
+                        // ✅ CORREGIDO: Usar el carrito existente que ya está siendo rastreado por EF
                         cart = existingCart;
+                        cart.ApplyAudit(currentUserId, isNew: false); // Actualizar auditoría
                         _logger.LogInformation("🛒 Carrito existente encontrado para usuario {UserId}", currentUserId);
                     }
 
@@ -151,7 +157,7 @@ namespace Cart.Application.Features.Carts.Commands
                     {
                         // Actualizar cantidad del item existente con auditoría
                         existingCartItem.Quantity += requestedQuantity;
-                        existingCartItem.ApplyAudit(currentUserId, isNew: false); // 👈 Aplicar auditoría
+                        existingCartItem.ApplyAudit(currentUserId, isNew: false);
                         _unitOfWork.CartItemRepository.Update(existingCartItem);
 
                         _logger.LogInformation("📦 Cantidad actualizada para producto {ProductId} en carrito. Nueva cantidad: {Quantity}",
@@ -173,11 +179,17 @@ namespace Cart.Application.Features.Carts.Commands
                             CategoryId = productDetails.Category.Id,
                             CategoryName = productDetails.Category.Name,
                             Cart = cart
-                        }.ApplyAudit(currentUserId, isNew: true); // 👈 Aplicar auditoría
+                        }.ApplyAudit(currentUserId, isNew: true);
 
                         _unitOfWork.CartItemRepository.Add(cartItem);
                         _logger.LogInformation("🎉 Nuevo CartItem creado: {ProductName} - Cantidad: {Quantity} - Subtotal: {Subtotal}",
                             cartItem.ProductName, cartItem.Quantity, cartItem.Subtotal);
+                    }
+
+                    // ✅ CORREGIDO: Solo actualizar el carrito si no es nuevo (ya se agregó arriba)
+                    if (!isNewCart)
+                    {
+                        _unitOfWork.CartRepository.Update(cart);
                     }
 
                     // 7. Guardar cambios - EF maneja transacción automática (Cart + CartItem)

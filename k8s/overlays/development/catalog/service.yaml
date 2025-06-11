@@ -10,4 +10,7 @@ spec:
     - name: rest
       port: 80          
       targetPort: 80    
-  type: ClusterIP      
+    - name: grpc
+      port: 7205      
+      targetPort: 7205
+  type: ClusterIP

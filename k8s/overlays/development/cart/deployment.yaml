@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: catalog-service
+  name: cart-service
   namespace: dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: catalog-service
+      app: cart-service
   template:
     metadata:
       labels:
-        app: catalog-service
+        app: cart-service
     spec:
       containers:
-      - name: catalog-service
-        image: carlosms18/microservicio-catalog:dev
+      - name: cart-service
+        image: carlosms18/microservicio-cart:dev
         env:
         - name: DB_PASSWORD 
           valueFrom:
@@ -25,15 +25,15 @@ spec:
         - name: RabbitMQParameters__username
           valueFrom:
             secretKeyRef:
-              name: catalog-secrets
+              name: cart-secrets
               key: RABBITMQ_USERNAME
         - name: RabbitMQParameters__password
           valueFrom:
             secretKeyRef:
-              name: catalog-secrets
+              name: cart-secrets
               key: RABBITMQ_PASSWORD
         - name: ASPNETCORE_ENVIRONMENT 
           value: "Kubernetes"
         ports:
         - containerPort: 80
-        - containerPort: 7205
+        - containerPort: 7206
