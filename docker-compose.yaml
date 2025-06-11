@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   user-service:
     build:
@@ -13,7 +12,7 @@ services:
     volumes:
       - ./src/User/User.WebAPI/appsettings.Docker.json:/app/appsettings.Docker.json
     restart: unless-stopped
-
+    
   catalog-service:
     build:
       context: .
@@ -21,9 +20,25 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Docker  
     ports:
-      - "7205:80"    
+      - "7205:80"
+      - "7206:7205"    
     volumes:
       - ./src/Catalog/Catalog.WebAPI/appsettings.Docker.json:/app/appsettings.Docker.json
     depends_on:
       - user-service
+    restart: unless-stopped
+
+  cart-service:
+    build:
+      context: .
+      dockerfile: src/Cart/Cart.WebAPI/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker  
+    ports:
+      - "5004:80"    
+    volumes:
+      - ./src/Cart/Cart.WebAPI/appsettings.Docker.json:/app/appsettings.Docker.json
+    depends_on:
+      - user-service
+      - catalog-service
     restart: unless-stopped
