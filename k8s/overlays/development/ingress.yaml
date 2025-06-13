@@ -1,0 +1,110 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecommerce-public-ingress
+  namespace: dev
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: localhost 
+    http:
+      paths:
+      - path: /api/User/login
+        pathType: Exact
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 80
+      
+      - path: /api/User/validate-token
+        pathType: Exact
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 80
+      
+      - path: /api/Category
+        pathType: Prefix
+        backend:
+          service:
+            name: catalog-service
+            port:
+              number: 80
+      
+      - path: /api/Product/GetAllProducts
+        pathType: Exact
+        backend:
+          service:
+            name: catalog-service
+            port:
+              number: 80
+      
+      - path: /api/Product/GetProductById
+        pathType: Prefix
+        backend:
+          service:
+            name: catalog-service
+            port:
+              number: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecommerce-private-ingress
+  namespace: dev
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    
+    nginx.ingress.kubernetes.io/auth-url: "http://user-service.dev.svc.cluster.local/api/User/validate-token"
+    nginx.ingress.kubernetes.io/auth-method: "GET"
+    nginx.ingress.kubernetes.io/auth-request-headers: "authorization"
+    nginx.ingress.kubernetes.io/auth-response-headers: "x-user-id,x-user-email,x-user-roles"
+    nginx.ingress.kubernetes.io/auth-timeout: "5s"
+    nginx.ingress.kubernetes.io/auth-always: "true"
+    
+  
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: localhost 
+    http:
+      paths:
+   
+      - path: /api/Category/CreateCategory
+        pathType: Exact
+        backend:
+          service:
+            name: catalog-service
+            port:
+              number: 80
+      
+    
+      - path: /api/Product/UpdateProductPrice
+        pathType: Exact
+        backend:
+          service:
+            name: catalog-service
+            port:
+              number: 80
+      
+      
+      - path: /api/Cart/AddProductToCart
+        pathType: Exact
+        backend:
+          service:
+            name: cart-service
+            port:
+              number: 80

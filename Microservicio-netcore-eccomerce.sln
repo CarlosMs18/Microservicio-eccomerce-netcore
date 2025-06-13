@@ -55,6 +55,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "overlays", "overlays", "{72
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "development", "development", "{06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}"
 	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\ingress.yaml = k8s\overlays\development\ingress.yaml
 		k8s\overlays\development\kustomization.yaml = k8s\overlays\development\kustomization.yaml
 		k8s\overlays\development\namespace.yaml = k8s\overlays\development\namespace.yaml
 	EndProjectSection
@@ -111,13 +112,42 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infrastructure", "infrastru
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Cart", "Cart", "{B64804BB-0C4E-4EA4-AFC1-AAC15AEEB52E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cart.Application", "src\Cart\Cart.Application\Cart.Application.csproj", "{4566F919-FAE0-41EE-995D-6E0600F2279B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cart.Application", "src\Cart\Cart.Application\Cart.Application.csproj", "{4566F919-FAE0-41EE-995D-6E0600F2279B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cart.Infrastructure", "src\Cart\Cart.Infrastructure\Cart.Infrastructure.csproj", "{BD6911A9-899D-4BFD-B333-E8B01FD53884}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cart.Infrastructure", "src\Cart\Cart.Infrastructure\Cart.Infrastructure.csproj", "{BD6911A9-899D-4BFD-B333-E8B01FD53884}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cart.Domain", "src\Cart\Cart.Domain\Cart.Domain.csproj", "{99F85D29-57AE-4246-82C1-7B5B7A9E6A49}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cart.Domain", "src\Cart\Cart.Domain\Cart.Domain.csproj", "{99F85D29-57AE-4246-82C1-7B5B7A9E6A49}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cart.WebAPI", "src\Cart\Cart.WebAPI\Cart.WebAPI.csproj", "{BA6D90A1-CE1A-4EEB-9EDC-4FD271AB75FD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cart.WebAPI", "src\Cart\Cart.WebAPI\Cart.WebAPI.csproj", "{BA6D90A1-CE1A-4EEB-9EDC-4FD271AB75FD}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "rabbitmq", "rabbitmq", "{DE3E24DF-0381-4871-A627-79E4236C7091}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\rabbitmq\deployment.yaml = k8s\overlays\development\rabbitmq\deployment.yaml
+		k8s\overlays\development\rabbitmq\kustomization.yaml = k8s\overlays\development\rabbitmq\kustomization.yaml
+		k8s\overlays\development\rabbitmq\service.yaml = k8s\overlays\development\rabbitmq\service.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{EA89299A-828A-4D78-889B-0AEB53D46FE6}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\rabbitmq\secrets\rabbitmq-secrets.yaml = k8s\overlays\development\rabbitmq\secrets\rabbitmq-secrets.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{D9370585-A44C-42F0-92C6-37B39649FDB5}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\catalog\secrets\app-secret.yaml = k8s\overlays\development\catalog\secrets\app-secret.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "cart", "cart", "{9648EE02-7A12-454D-8CD4-5A24EEB74A02}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\cart\deployment.yaml = k8s\overlays\development\cart\deployment.yaml
+		k8s\overlays\development\cart\kustomization.yaml = k8s\overlays\development\cart\kustomization.yaml
+		k8s\overlays\development\cart\service.yaml = k8s\overlays\development\cart\service.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{565B074E-6D80-423D-BCE5-0B5306FD5C12}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\cart\secrets\app-secret.yaml = k8s\overlays\development\cart\secrets\app-secret.yaml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -223,6 +253,11 @@ Global
 		{BD6911A9-899D-4BFD-B333-E8B01FD53884} = {B64804BB-0C4E-4EA4-AFC1-AAC15AEEB52E}
 		{99F85D29-57AE-4246-82C1-7B5B7A9E6A49} = {B64804BB-0C4E-4EA4-AFC1-AAC15AEEB52E}
 		{BA6D90A1-CE1A-4EEB-9EDC-4FD271AB75FD} = {B64804BB-0C4E-4EA4-AFC1-AAC15AEEB52E}
+		{DE3E24DF-0381-4871-A627-79E4236C7091} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
+		{EA89299A-828A-4D78-889B-0AEB53D46FE6} = {DE3E24DF-0381-4871-A627-79E4236C7091}
+		{D9370585-A44C-42F0-92C6-37B39649FDB5} = {1DD3BE76-3A06-4725-9077-F97E7E825AD0}
+		{9648EE02-7A12-454D-8CD4-5A24EEB74A02} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
+		{565B074E-6D80-423D-BCE5-0B5306FD5C12} = {9648EE02-7A12-454D-8CD4-5A24EEB74A02}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}

@@ -7,4 +7,5 @@ resources:
 - catalog/ 
 - cart/
 - rabbitmq/ 
+- ingress.yaml
 namespace: dev    

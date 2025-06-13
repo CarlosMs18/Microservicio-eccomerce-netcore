@@ -48,7 +48,7 @@ namespace User.WebAPI.Controllers
         public async Task<IActionResult> ValidateToken([FromHeader(Name = "Authorization")] string authHeader)
         {
 
-            Console.WriteLine("LLAMANDO CONTROLADOR DE USER VALIDATE TOKEN");
+            Console.WriteLine("LLAMANDO CONTROLADOR DE USER VALIDATE TOKEN HTTP!!");
 
             if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
                 return Unauthorized();
