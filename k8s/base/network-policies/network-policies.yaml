@@ -1,0 +1,210 @@
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: dev
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: user-service-policy
+  namespace: dev
+spec:
+  podSelector:
+    matchLabels:
+      app: user-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+ 
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+  
+  - from:
+    - podSelector:
+        matchLabels:
+          app: cart-service
+    - podSelector:
+        matchLabels:
+          app: catalog-service
+  egress:
+ 
+  - to:
+    - podSelector:
+        matchLabels:
+          app: sql-service
+    ports:
+    - protocol: TCP
+      port: 1433
+  
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: catalog-service-policy
+  namespace: dev
+spec:
+  podSelector:
+    matchLabels:
+      app: catalog-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+  
+  - from:
+    - podSelector:
+        matchLabels:
+          app: cart-service
+    ports:
+    - protocol: TCP
+      port: 7205  
+  egress:
+ 
+  - to:
+    - podSelector:
+        matchLabels:
+          app: sql-service
+    ports:
+    - protocol: TCP
+      port: 1433
+  
+  - to:
+    - podSelector:
+        matchLabels:
+          app: rabbitmq-service
+    ports:
+    - protocol: TCP
+      port: 5672
+ 
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cart-service-policy
+  namespace: dev
+spec:
+  podSelector:
+    matchLabels:
+      app: cart-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: user-service
+    ports:
+    - protocol: TCP
+      port: 80
+
+  - to:
+    - podSelector:
+        matchLabels:
+          app: catalog-service
+    ports:
+    - protocol: TCP
+      port: 7205  
+  - to:
+    - podSelector:
+        matchLabels:
+          app: rabbitmq-service
+    ports:
+    - protocol: TCP
+      port: 5672
+  - to:
+    - podSelector:
+        matchLabels:
+          app: sql-service
+    ports:
+    - protocol: TCP
+      port: 1433
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sql-service-policy
+  namespace: dev
+spec:
+  podSelector:
+    matchLabels:
+      app: sql-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: user-service
+    - podSelector:
+        matchLabels:
+          app: catalog-service
+    - podSelector:
+        matchLabels:
+          app: cart-service
+    ports:
+    - protocol: TCP
+      port: 1433
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rabbitmq-service-policy
+  namespace: dev
+spec:
+  podSelector:
+    matchLabels:
+      app: rabbitmq-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: catalog-service
+    - podSelector:
+        matchLabels:
+          app: cart-service
+    ports:
+    - protocol: TCP
+      port: 5672
