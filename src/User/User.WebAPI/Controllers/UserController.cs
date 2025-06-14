@@ -47,7 +47,6 @@ namespace User.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> ValidateToken([FromHeader(Name = "Authorization")] string authHeader)
         {
-
             Console.WriteLine("LLAMANDO CONTROLADOR DE USER VALIDATE TOKEN HTTP!!");
 
             if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
@@ -56,7 +55,29 @@ namespace User.WebAPI.Controllers
             var token = authHeader["Bearer ".Length..].Trim();
             var result = await _externalAuthService.ValidateTokenAsync(token);
 
-            return result.IsValid ? Ok(result) : Unauthorized();
+            if (!result.IsValid)
+                return Unauthorized();
+
+            // ✅ SOLO en Kubernetes: Inyectar headers para Ingress
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+            {
+                Response.Headers.Add("x-user-id", result.UserId ?? "");
+                Response.Headers.Add("x-user-email", result.Email ?? "");
+
+                // Convertir roles a string separado por comas
+                var rolesString = result.Roles != null && result.Roles.Any()
+                    ? string.Join(",", result.Roles)
+                    : "";
+                Response.Headers.Add("x-user-roles", rolesString);
+
+                Console.WriteLine($"🔐 Headers inyectados para Ingress - UserId: {result.UserId}, Email: {result.Email}, Roles: {rolesString}");
+            }
+            else
+            {
+                Console.WriteLine($"🔓 Entorno no kubernetes: Solo devolviendo JSON (sin headers)");
+            }
+
+            return Ok(result);
         }
     }
 }

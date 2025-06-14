@@ -89,6 +89,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "database", "database", "{74
 	ProjectSection(SolutionItems) = preProject
 		k8s\base\database\kustomization.yaml = k8s\base\database\kustomization.yaml
 		k8s\base\database\service.yaml = k8s\base\database\service.yaml
+		k8s\base\database\sql-pvc.yaml = k8s\base\database\sql-pvc.yaml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{AB554CBE-FB18-479F-86CF-38BB94CC7277}"

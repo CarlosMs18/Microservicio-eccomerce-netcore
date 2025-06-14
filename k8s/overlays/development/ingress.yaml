@@ -1,3 +1,4 @@
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -22,7 +23,6 @@ spec:
             name: user-service
             port:
               number: 80
-      
       - path: /api/User/validate-token
         pathType: Exact
         backend:
@@ -30,7 +30,13 @@ spec:
             name: user-service
             port:
               number: 80
-      
+      - path: /api/User/RegisterUser
+        pathType: Exact
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 80
       - path: /api/Category
         pathType: Prefix
         backend:
@@ -38,7 +44,6 @@ spec:
             name: catalog-service
             port:
               number: 80
-      
       - path: /api/Product/GetAllProducts
         pathType: Exact
         backend:
@@ -46,7 +51,6 @@ spec:
             name: catalog-service
             port:
               number: 80
-      
       - path: /api/Product/GetProductById
         pathType: Prefix
         backend:
@@ -54,7 +58,6 @@ spec:
             name: catalog-service
             port:
               number: 80
-
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -63,26 +66,47 @@ metadata:
   namespace: dev
   annotations:
     kubernetes.io/ingress.class: "nginx"
-    
     nginx.ingress.kubernetes.io/auth-url: "http://user-service.dev.svc.cluster.local/api/User/validate-token"
     nginx.ingress.kubernetes.io/auth-method: "GET"
     nginx.ingress.kubernetes.io/auth-request-headers: "authorization"
     nginx.ingress.kubernetes.io/auth-response-headers: "x-user-id,x-user-email,x-user-roles"
     nginx.ingress.kubernetes.io/auth-timeout: "5s"
     nginx.ingress.kubernetes.io/auth-always: "true"
-    
-  
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location @error401 {
+        add_header Content-Type application/json always;
+        return 401 '{"success": false, "message": "Authentication required", "error": "UNAUTHORIZED"}';
+      }
+      
+      location @error403 {
+        add_header Content-Type application/json always;
+        return 403 '{"success": false, "message": "Access forbidden", "error": "FORBIDDEN"}';
+      }
+      
+      location @error500 {
+        add_header Content-Type application/json always;
+        return 500 '{"success": false, "message": "Authentication service error", "error": "AUTH_SERVICE_ERROR"}';
+      }
+      
+      location @error503 {
+        add_header Content-Type application/json always;
+        return 503 '{"success": false, "message": "Authentication service unavailable", "error": "AUTH_SERVICE_UNAVAILABLE"}';
+      }
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      error_page 401 = @error401;
+      error_page 403 = @error403;
+      error_page 500 = @error500;
+      error_page 503 = @error503;
 spec:
   ingressClassName: nginx
   rules:
   - host: localhost 
     http:
       paths:
-   
       - path: /api/Category/CreateCategory
         pathType: Exact
         backend:
@@ -91,7 +115,6 @@ spec:
             port:
               number: 80
       
-    
       - path: /api/Product/UpdateProductPrice
         pathType: Exact
         backend:
@@ -99,7 +122,6 @@ spec:
             name: catalog-service
             port:
               number: 80
-      
       
       - path: /api/Cart/AddProductToCart
         pathType: Exact

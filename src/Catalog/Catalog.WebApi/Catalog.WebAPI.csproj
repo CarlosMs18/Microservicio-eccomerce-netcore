@@ -40,4 +40,8 @@
     <None Remove="..\.dockerignore" />
   </ItemGroup>
 
+	<PropertyGroup Condition="'$(BUILD_ENV)' == 'Kubernetes'">
+		<DefineConstants>$(DefineConstants);KUBERNETES</DefineConstants>
+	</PropertyGroup>
+
 </Project>

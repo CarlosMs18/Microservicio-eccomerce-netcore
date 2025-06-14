@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
+using Shared.Infrastructure.Extensions;
 
 // Bootstrap logger
 Log.Logger = new LoggerConfiguration()
@@ -100,7 +101,18 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
     // Servicios de aplicación e infraestructura
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration, environment);
-
+    if (environment == "Kubernetes")
+    {
+        // Para Kubernetes: Leer headers del Ingress
+        builder.Services.AddApiGatewayAuthentication();
+        Log.Information("🔐 ApiGateway Authentication habilitado para Kubernetes");
+    }
+    else
+    {
+        // Para Development/Docker: El middleware gRPC se encarga
+        // No agregamos autenticación aquí porque el middleware maneja todo
+        Log.Information("🔐 Autenticación será manejada por TokenGrpcValidationMiddleware");
+    }
     // Swagger solo para desarrollo
     if (environment == "Development")
     {
@@ -145,7 +157,16 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     app.UseHttpsRedirection();
     app.UseRouting();
-    app.UseMiddleware<TokenGrpcValidationMiddleware>();
+    if (environment == "Kubernetes")
+    {
+        Log.Information("🔐 ApiGateway Authentication habilitado para Kubernetes");
+    }
+    else
+    {
+        // Development/Docker: Usar middleware gRPC tradicional
+        app.UseMiddleware<TokenGrpcValidationMiddleware>();
+        Log.Information("🔐 TokenGrpcValidationMiddleware habilitado para entorno: {Environment}", environment);
+    }
     app.UseAuthorization();
     app.MapControllers();
 
