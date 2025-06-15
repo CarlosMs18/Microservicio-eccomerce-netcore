@@ -145,7 +145,15 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{565B
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "network-policies", "network-policies", "{54CB7A3A-1704-498B-AF10-35A402CA60BC}"
 	ProjectSection(SolutionItems) = preProject
+		k8s\base\network-policies\kustomization.yaml = k8s\base\network-policies\kustomization.yaml
 		k8s\base\network-policies\network-policies.yaml = k8s\base\network-policies\network-policies.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{FE3C050E-F4DB-4EB1-8DF1-09DE96609FA4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kind", "kind", "{A4C96F73-CEED-4B18-9ADF-190F7F4F562C}"
+	ProjectSection(SolutionItems) = preProject
+		infra\kind\kind-config.yaml = infra\kind\kind-config.yaml
 	EndProjectSection
 EndProject
 Global
@@ -257,6 +265,7 @@ Global
 		{9648EE02-7A12-454D-8CD4-5A24EEB74A02} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
 		{565B074E-6D80-423D-BCE5-0B5306FD5C12} = {9648EE02-7A12-454D-8CD4-5A24EEB74A02}
 		{54CB7A3A-1704-498B-AF10-35A402CA60BC} = {65E34109-8D8F-4C4C-8F6F-1BF50922642B}
+		{A4C96F73-CEED-4B18-9ADF-190F7F4F562C} = {FE3C050E-F4DB-4EB1-8DF1-09DE96609FA4}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}
