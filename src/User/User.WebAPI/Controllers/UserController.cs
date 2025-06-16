@@ -1,4 +1,5 @@
-﻿using MediatR;
+﻿using Azure.Core;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Shared.Core.Dtos;
@@ -28,9 +29,10 @@ namespace User.WebAPI.Controllers
         [HttpPost("[action]")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-        public async Task<ActionResult> RegisterUser([FromBody] RegistrationCommand command)
+        public async Task<ActionResult> RegisterUser([FromBody] RegistrationRequest request)
         {
-            return Ok(await _mediator.Send(command));
+            var response = await _mediator.Send(new RegistrationCommand { Request = request });
+            return Ok(response);
         }
 
         [HttpPost("login")]
@@ -43,6 +45,7 @@ namespace User.WebAPI.Controllers
         }
 
 
+
         [HttpGet("validate-token")]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TokenValidationDecoded))]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -53,28 +56,37 @@ namespace User.WebAPI.Controllers
         {
             Console.WriteLine("LLAMANDO CONTROLADOR DE USER VALIDATE TOKEN HTTP!!");
 
-            // ✅ SOLO en Kubernetes: Manejo completo de errores + headers
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+            var isKubernetesEnvironment = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
+
+            try
             {
-                try
+                // ✅ Validación básica del token (común para ambos entornos)
+                if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
                 {
-                    // Validación básica del token
-                    if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
-                    {
+                    if (isKubernetesEnvironment)
                         return CreateErrorResponse(401, "Authentication required", "UNAUTHORIZED");
-                    }
+                    else
+                        return Unauthorized();
+                }
 
-                    var token = authHeader["Bearer ".Length..].Trim();
+                var token = authHeader["Bearer ".Length..].Trim();
 
-                    // Validar el token usando el servicio externo
-                    var result = await _externalAuthService.ValidateTokenAsync(token);
+                // ✅ Validar el token usando el servicio externo
+                // El servicio ya maneja todas las excepciones y retorna IsValid
+                var result = await _externalAuthService.ValidateTokenAsync(token);
 
-                    if (!result.IsValid)
-                    {
+                if (!result.IsValid)
+                {
+                    if (isKubernetesEnvironment)
                         return CreateErrorResponse(401, "Authentication required", "UNAUTHORIZED");
-                    }
+                    else
+                        return Unauthorized();
+                }
 
-                    // Inyectar headers de respuesta para el Ingress
+                // ✅ Respuesta exitosa según el entorno
+                if (isKubernetesEnvironment)
+                {
+                    // 🔐 KUBERNETES: Inyectar headers de respuesta para el Ingress
                     Response.Headers.Add("x-user-id", result.UserId ?? "");
                     Response.Headers.Add("x-user-email", result.Email ?? "");
 
@@ -86,48 +98,45 @@ namespace User.WebAPI.Controllers
 
                     Console.WriteLine($"🔐 Headers inyectados para Ingress - UserId: {result.UserId}, Email: {result.Email}, Roles: {rolesString}");
 
-                    // En modo Kubernetes, devolver solo un 200 OK para el Ingress
                     return Ok(new { success = true, message = "Token valid" });
                 }
-                catch (HttpRequestException httpEx)
+                else
                 {
-                    // Error de conectividad con el servicio de autenticación
-                    Console.WriteLine($"❌ Error de conectividad con servicio de auth: {httpEx.Message}");
-                    return CreateErrorResponse(503, "Authentication service unavailable", "AUTH_SERVICE_UNAVAILABLE");
-                }
-                catch (TaskCanceledException timeoutEx)
-                {
-                    // Timeout del servicio de autenticación
-                    Console.WriteLine($"⏰ Timeout en servicio de auth: {timeoutEx.Message}");
-                    return CreateErrorResponse(503, "Authentication service unavailable", "AUTH_SERVICE_UNAVAILABLE");
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    // Token inválido o expirado
-                    return CreateErrorResponse(401, "Authentication required", "UNAUTHORIZED");
-                }
-                catch (Exception ex)
-                {
-                    // Error interno del servicio de autenticación
-                    Console.WriteLine($"💥 Error interno en validación de token: {ex.Message}");
-                    return CreateErrorResponse(500, "Authentication service error", "AUTH_SERVICE_ERROR");
+                    // 🔓 OTROS ENTORNOS: Devolver el objeto completo
+                    Console.WriteLine($"🔓 Entorno no kubernetes: Devolviendo objeto completo");
+                    return Ok(result);
                 }
             }
-            else
+            catch (HttpRequestException httpEx)
             {
-                // 🔓 Otros entornos: Lógica simple sin manejo de errores específicos
-                Console.WriteLine($"🔓 Entorno no kubernetes: Lógica simple");
+                // ❌ Error de conectividad con servicios externos (si los hubiera)
+                Console.WriteLine($"❌ Error de conectividad: {httpEx.Message}");
 
-                if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
-                    return Unauthorized();
+                if (isKubernetesEnvironment)
+                    return CreateErrorResponse(503, "Authentication service unavailable", "AUTH_SERVICE_UNAVAILABLE");
+                else
+                    return StatusCode(503, new { error = "Authentication service unavailable", message = httpEx.Message });
+            }
+            catch (TaskCanceledException timeoutEx)
+            {
+                // ⏰ Timeout
+                Console.WriteLine($"⏰ Timeout: {timeoutEx.Message}");
 
-                var token = authHeader["Bearer ".Length..].Trim();
-                var result = await _externalAuthService.ValidateTokenAsync(token);
+                if (isKubernetesEnvironment)
+                    return CreateErrorResponse(503, "Authentication service unavailable", "AUTH_SERVICE_UNAVAILABLE");
+                else
+                    return StatusCode(503, new { error = "Authentication service timeout", message = timeoutEx.Message });
+            }
+            catch (Exception ex)
+            {
+                // 💥 Error interno no esperado
+                Console.WriteLine($"💥 Error interno en validación de token: {ex.Message}");
+                Console.WriteLine($"💥 Stack trace: {ex.StackTrace}");
 
-                if (!result.IsValid)
-                    return Unauthorized();
-
-                return Ok(result);
+                if (isKubernetesEnvironment)
+                    return CreateErrorResponse(500, "Authentication service error", "AUTH_SERVICE_ERROR");
+                else
+                    return StatusCode(500, new { error = "Internal authentication error", message = ex.Message });
             }
         }
 
@@ -140,7 +149,8 @@ namespace User.WebAPI.Controllers
             {
                 success = false,
                 message = message,
-                error = error
+                error = error,
+                timestamp = DateTime.UtcNow
             };
 
             // Asegurar que el Content-Type sea application/json

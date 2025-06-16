@@ -24,9 +24,16 @@ public class ExternalAuthService : IExternalAuthService
 
         try
         {
+            // Validación de token nulo o vacío ANTES de procesar
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Console.WriteLine("Token is null or empty");
+                result.IsValid = false;
+                return result;
+            }
+
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.UTF8.GetBytes(_jwtSettings.Key);
-
             var validationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -58,9 +65,59 @@ public class ExternalAuthService : IExternalAuthService
 
             return result;
         }
+        catch (SecurityTokenMalformedException ex)
+        {
+            // Token malformado (formato incorrecto)
+            Console.WriteLine($"Token malformado: {ex.Message}");
+            result.IsValid = false;
+            return result;
+        }
+        catch (SecurityTokenExpiredException ex)
+        {
+            // Token expirado
+            Console.WriteLine($"Token expirado: {ex.Message}");
+            result.IsValid = false;
+            return result;
+        }
+        catch (SecurityTokenInvalidIssuerException ex)
+        {
+            // Issuer inválido
+            Console.WriteLine($"Issuer inválido: {ex.Message}");
+            result.IsValid = false;
+            return result;
+        }
+        catch (SecurityTokenInvalidAudienceException ex)
+        {
+            // Audience inválido
+            Console.WriteLine($"Audience inválido: {ex.Message}");
+            result.IsValid = false;
+            return result;
+        }
+        catch (SecurityTokenInvalidSignatureException ex)
+        {
+            // Firma inválida
+            Console.WriteLine($"Firma inválida: {ex.Message}");
+            result.IsValid = false;
+            return result;
+        }
         catch (SecurityTokenException ex)
         {
-            Console.WriteLine($"Token validation failed: {ex.Message}");
+            // Cualquier otra excepción de SecurityToken
+            Console.WriteLine($"Error de seguridad del token: {ex.Message}");
+            result.IsValid = false;
+            return result;
+        }
+        catch (ArgumentException ex)
+        {
+            // Argumentos inválidos
+            Console.WriteLine($"Argumentos inválidos: {ex.Message}");
+            result.IsValid = false;
+            return result;
+        }
+        catch (Exception ex)
+        {
+            // Cualquier otra excepción no esperada
+            Console.WriteLine($"Error inesperado en validación de token: {ex.Message}");
             result.IsValid = false;
             return result;
         }
