@@ -32,7 +32,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Shared\Shared.Core\Shared.Core.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Infrastructure\Shared.Infrastructure.csproj" />
-    <ProjectReference Include="..\Users.Application\User.Application.csproj" />
+    <ProjectReference Include="..\User.Application\User.Application.csproj" />
   </ItemGroup>
 
     <ItemGroup>

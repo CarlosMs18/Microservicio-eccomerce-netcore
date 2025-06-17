@@ -192,3 +192,5 @@ static void ConfigureMiddleware(WebApplication app, string environment)
     // gRPC Service
     app.MapGrpcService<AuthGrpcService>();
 }
+
+public partial class Program { }

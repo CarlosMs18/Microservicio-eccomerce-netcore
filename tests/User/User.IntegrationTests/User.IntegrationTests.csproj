@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net7.0</TargetFramework>
@@ -10,7 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.7.1" />
+	  
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.4.0" />
     <PackageReference Include="xunit" Version="2.4.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -20,6 +21,15 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+	  <PackageReference Include="FluentAssertions" Version="6.12.0" />
+	  <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="7.0.0" />
+	  <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\User\User.Application\User.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\User\User.Infrastructure\User.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\User\User.WebAPI\User.WebAPI.csproj" />
   </ItemGroup>
 
 </Project>

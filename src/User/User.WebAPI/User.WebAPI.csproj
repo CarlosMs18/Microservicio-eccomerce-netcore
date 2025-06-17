@@ -1,7 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net7.0</TargetFramework>
+	<PreserveCompilationContext>true</PreserveCompilationContext>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>79e7a924-5af0-47d7-903b-9ded178c3227</UserSecretsId>
@@ -29,8 +30,8 @@
   </ItemGroup>
 
   <ItemGroup> 
+    <ProjectReference Include="..\User.Application\User.Application.csproj" /> 
     <ProjectReference Include="..\User.Infrastructure\User.Infrastructure.csproj" />
-    <ProjectReference Include="..\Users.Application\User.Application.csproj" />
   </ItemGroup>
 
 </Project>
