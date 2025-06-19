@@ -11,7 +11,7 @@ using User.Infrastructure.Services.External.Grpc;
 using User.WebAPI.Middlewares;
 using Users.Application;
 
-// Test comment to trigger workflow
+// Test comment to trigger workflow v2
 // Bootstrap logger
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
