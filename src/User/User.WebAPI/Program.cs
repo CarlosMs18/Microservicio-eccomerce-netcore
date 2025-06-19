@@ -40,7 +40,7 @@ try
 
     builder.Configuration.LogEndpointsConfiguration(environment, restPort, grpcPort);
 
-    Log.Information("✅ User Service listo y ejecutándose");
+    Log.Information("✅ User Service listo y ejecutándose.");
     await app.RunAsync();
 }
 catch (Exception ex)
