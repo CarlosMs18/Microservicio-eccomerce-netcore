@@ -29,6 +29,7 @@ namespace User.WebAPI.Middlewares
                 _logger.LogError(ex, ex.Message);
                 var statusCode = ex is NotFoundException ? HttpStatusCode.NotFound :
                                  ex is ValidationException || ex is BadRequestException ? HttpStatusCode.BadRequest :
+                                 ex is UnauthorizedException ? HttpStatusCode.Unauthorized :
                                  HttpStatusCode.InternalServerError;
                 IEnumerable<KeyValuePair<string, string>>? messageList = ex is ValidationException ve ? ve.Errors : null;
 

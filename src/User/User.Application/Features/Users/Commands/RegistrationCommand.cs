@@ -4,6 +4,7 @@ using User.Application.Contracts.Persistence;
 using User.Application.Contracts.Services;
 using User.Application.DTOs.Requests;
 using User.Application.DTOs.Responses;
+using User.Application.Exceptions;
 using User.Application.Models;
 
 
@@ -35,7 +36,7 @@ namespace User.Application.Features.Users.Commands
             // 1. Validar email único
             if (await _userRepository.IsEmailUniqueAsync(request.Email) == false)
             {
-                throw new Exception($"El email {request.Email} ya está registrado.");
+                throw new BadRequestException($"El email {request.Email} ya está registrado.");
             }
             var user = new ApplicationUser
             {
@@ -52,7 +53,7 @@ namespace User.Application.Features.Users.Commands
             if (!result.Succeeded)
             {
                 var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                throw new Exception($"Error al crear usuario: {errors}");
+                throw new BadRequestException($"Error al crear usuario: {errors}");
             }
 
             await _userManager.AddToRoleAsync(user, "User");

@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 using User.Application.Contracts.Services;
 using User.Application.DTOs.Requests;
 using User.Application.DTOs.Responses;
-
+using User.Application.Exceptions;
 using User.Application.Models;
 
 namespace User.Application.Features.Users.Commands
@@ -29,7 +29,7 @@ namespace User.Application.Features.Users.Commands
         {
             var user = await _userManager.FindByEmailAsync(request.Request.Email);
             if (user == null)
-                throw new UnauthorizedAccessException("Credenciales inválidas.");
+                throw new BadRequestException("Credenciales inválidas.");
 
             var result = await _authService.PasswordSignInAsync(
                 request.Request.Email,
@@ -39,7 +39,7 @@ namespace User.Application.Features.Users.Commands
             );
 
             if (!result.Succeeded)
-                throw new UnauthorizedAccessException("Credenciales inválidas.");
+                throw new UnauthorizedException("Credenciales inválidas.");
 
             // Usa tu método original adaptado, ahora desde IAuthService
             var token = await _authService.GenerateJwtTokenAsync(user);

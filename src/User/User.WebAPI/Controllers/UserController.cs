@@ -29,6 +29,7 @@ namespace User.WebAPI.Controllers
         [HttpPost("[action]")]
         [ProducesResponseType((int)HttpStatusCode.OK)]
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+        [ProducesResponseType((int)HttpStatusCode.UnsupportedMediaType)]
         public async Task<ActionResult> RegisterUser([FromBody] RegistrationRequest request)
         {
             var response = await _mediator.Send(new RegistrationCommand { Request = request });
@@ -52,7 +53,7 @@ namespace User.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
-        public async Task<IActionResult> ValidateToken([FromHeader(Name = "Authorization")] string authHeader)
+        public async Task<IActionResult> ValidateToken()
         {
             Console.WriteLine("LLAMANDO CONTROLADOR DE USER VALIDATE TOKEN HTTP!!");
 
@@ -60,6 +61,7 @@ namespace User.WebAPI.Controllers
 
             try
             {
+                var authHeader = Request.Headers["Authorization"].FirstOrDefault();
                 // ✅ Validación básica del token (común para ambos entornos)
                 if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
                 {

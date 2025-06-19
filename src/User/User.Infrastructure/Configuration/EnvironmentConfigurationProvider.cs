@@ -11,6 +11,7 @@ namespace User.Infrastructure.Configuration
                 "Development" => GetDevelopmentConfig(config),
                 "Docker" => GetDockerConfig(config),
                 "Kubernetes" => GetKubernetesConfig(config),
+                "Testing" => GetTestingConfig(config),
                 _ => throw new InvalidOperationException($"Entorno {environment} no soportado")
             };
         }
@@ -65,6 +66,60 @@ namespace User.Infrastructure.Configuration
                     EnableDetailedErrors = true,
                     MaxMessageSizeMB = 16,
                     EnableCompression = true
+                }
+            };
+        }
+
+
+        private static UserConfiguration GetTestingConfig(IConfiguration config)
+        {
+            var connectionParams = config.GetSection("ConnectionParameters");
+            var poolingParams = config.GetSection("ConnectionPooling");
+            var templates = config.GetSection("ConnectionTemplates");
+            var template = templates["Local"] ?? throw new InvalidOperationException("Template Local no encontrado");
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["server"] = connectionParams["server"] ?? "(localdb)\\mssqllocaldb",
+                ["database"] = config["User:DatabaseName"] ?? "UserDB_Testing", // 👈 BD diferente para tests
+                ["trusted"] = connectionParams["trusted"] ?? "true",
+                ["pooling"] = poolingParams["pooling"] ?? "true",
+                ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100",
+                ["minPoolSize"] = poolingParams["minPoolSize"] ?? "5",
+                ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30",
+                ["commandTimeout"] = poolingParams["commandTimeout"] ?? "30"
+            };
+
+            var connectionString = BuildConnectionString(template, parameters);
+
+            return new UserConfiguration
+            {
+                Environment = "Testing",
+                ConnectionString = connectionString,
+                Database = new DatabaseConfiguration
+                {
+                    MaxRetryCount = 3, // 👈 Menos reintentos en tests
+                    MaxRetryDelaySeconds = 10, // 👈 Menos delay en tests
+                    EnableDetailedErrors = true,
+                    EnableSensitiveDataLogging = true
+                },
+                Logging = new LoggingConfiguration
+                {
+                    MinimumLevel = "Warning", // 👈 Menos logs en tests
+                    EnableFileLogging = false, // 👈 Sin archivos en tests
+                    RetainedFileCountLimit = 0
+                },
+                Identity = new IdentityConfiguration
+                {
+                    RequireUniqueEmail = true,
+                    MaxFailedAccessAttempts = 10, // 👈 Más permisivo en tests
+                    LockoutTimeSpanMinutes = 1 // 👈 Lockout más corto en tests
+                },
+                Grpc = new GrpcConfiguration
+                {
+                    EnableDetailedErrors = true,
+                    MaxMessageSizeMB = 16,
+                    EnableCompression = false // 👈 Sin compresión en tests
                 }
             };
         }
