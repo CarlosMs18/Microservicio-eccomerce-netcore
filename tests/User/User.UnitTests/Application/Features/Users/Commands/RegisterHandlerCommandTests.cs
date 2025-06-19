@@ -1,4 +1,5 @@
 ﻿using User.Application.Contracts.Persistence;
+using User.Application.Exceptions;
 
 namespace User.UnitTests.Application.Features.Users.Commands;
 
@@ -67,7 +68,7 @@ public class RegisterHandlerCommandTests
         SetupEmailUnique(request.Request.Email, false);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<Exception>(
+        var exception = await Assert.ThrowsAsync<BadRequestException>(
             () => _handler.Handle(request, CancellationToken.None));
 
         exception.Message.Should().Be($"El email {request.Request.Email} ya está registrado.");
@@ -93,7 +94,7 @@ public class RegisterHandlerCommandTests
         SetupUserCreation(IdentityResult.Failed(identityErrors), null);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<Exception>(
+        var exception = await Assert.ThrowsAsync<BadRequestException>(
             () => _handler.Handle(request, CancellationToken.None));
 
         exception.Message.Should().Contain("Error al crear usuario:");
@@ -157,7 +158,7 @@ public class RegisterHandlerCommandTests
         SetupUserCreation(IdentityResult.Failed(identityErrors), null);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<Exception>(
+        var exception = await Assert.ThrowsAsync<BadRequestException>(
             () => _handler.Handle(request, CancellationToken.None));
 
         exception.Message.Should().Contain("Error al crear usuario:");

@@ -113,7 +113,7 @@ namespace User.IntegrationTests.Controllers
             var response = await Client.PostAsync(LoginEndpoint, jsonContent);
 
             // Assert
-            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         }
 
         [Fact]
@@ -147,23 +147,18 @@ namespace User.IntegrationTests.Controllers
         #region Error Tests - Validation
 
         [Theory]
-        [InlineData("", "Password123!")] // Email vacío
-        [InlineData("invalid-email", "Password123!")] // Email inválido
-        [InlineData("test@test.com", "")] // Password vacío
         [InlineData(null, "Password123!")] // Email null
         [InlineData("test@test.com", null)] // Password null
-        public async Task Login_InvalidData_ShouldReturnBadRequest(string email, string password)
+        public async Task Login_NullData_ShouldReturnBadRequest(string email, string password)
         {
             // Arrange
             await Factory.CleanDatabaseAsync();
             await Factory.SeedTestDataAsync();
-
             var request = new LoginRequest
             {
                 Email = email,
                 Password = password
             };
-
             var jsonContent = new StringContent(
                 JsonSerializer.Serialize(request, JsonOptions),
                 Encoding.UTF8,
@@ -174,6 +169,32 @@ namespace User.IntegrationTests.Controllers
 
             // Assert
             response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        }
+
+        [Theory]
+        [InlineData("", "Password123!")] // Email vacío
+        [InlineData("invalid-email", "Password123!")] // Email inválido (no existe)
+        [InlineData("test@test.com", "")] // Password vacío
+        public async Task Login_InvalidCredentials_ShouldReturnUnauthorized(string email, string password)
+        {
+            // Arrange
+            await Factory.CleanDatabaseAsync();
+            await Factory.SeedTestDataAsync();
+            var request = new LoginRequest
+            {
+                Email = email,
+                Password = password
+            };
+            var jsonContent = new StringContent(
+                JsonSerializer.Serialize(request, JsonOptions),
+                Encoding.UTF8,
+                "application/json");
+
+            // Act
+            var response = await Client.PostAsync(LoginEndpoint, jsonContent);
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         }
 
         [Fact]

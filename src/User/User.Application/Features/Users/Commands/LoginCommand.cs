@@ -29,7 +29,7 @@ namespace User.Application.Features.Users.Commands
         {
             var user = await _userManager.FindByEmailAsync(request.Request.Email);
             if (user == null)
-                throw new BadRequestException("Credenciales inválidas.");
+                throw new UnauthorizedException("Credenciales inválidas.");
 
             var result = await _authService.PasswordSignInAsync(
                 request.Request.Email,

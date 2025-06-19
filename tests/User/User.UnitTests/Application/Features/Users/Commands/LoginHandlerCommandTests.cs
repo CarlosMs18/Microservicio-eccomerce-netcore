@@ -1,4 +1,6 @@
-﻿namespace User.UnitTests.Application.Features.Users.Commands;
+﻿using User.Application.Exceptions;
+
+namespace User.UnitTests.Application.Features.Users.Commands;
 
 public class LoginHandlerCommandTests
 {
@@ -53,7 +55,7 @@ public class LoginHandlerCommandTests
         SetupUserManagerFindByEmail(request.Request.Email, null);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+        var exception = await Assert.ThrowsAsync<UnauthorizedException>(
             () => _handler.Handle(request, CancellationToken.None));
 
         exception.Message.Should().Be("Credenciales inválidas.");
@@ -72,7 +74,7 @@ public class LoginHandlerCommandTests
         SetupAuthServicePasswordSignIn(request.Request.Email, request.Request.Password, SignInResult.Failed);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+        var exception = await Assert.ThrowsAsync<UnauthorizedException>(
             () => _handler.Handle(request, CancellationToken.None));
 
         exception.Message.Should().Be("Credenciales inválidas.");
@@ -91,7 +93,7 @@ public class LoginHandlerCommandTests
         SetupUserManagerFindByEmail(email, null);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+        var exception = await Assert.ThrowsAsync<UnauthorizedException>(
             () => _handler.Handle(request, CancellationToken.None));
 
         exception.Message.Should().Be("Credenciales inválidas.");
@@ -110,7 +112,7 @@ public class LoginHandlerCommandTests
         SetupAuthServicePasswordSignIn(request.Request.Email, request.Request.Password, SignInResult.LockedOut);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(
+        var exception = await Assert.ThrowsAsync<UnauthorizedException>(
             () => _handler.Handle(request, CancellationToken.None));
 
         exception.Message.Should().Be("Credenciales inválidas.");

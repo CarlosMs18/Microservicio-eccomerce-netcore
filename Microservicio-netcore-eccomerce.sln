@@ -158,7 +158,14 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "User.UnitTests", "tests\Use
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "User.Application", "src\User\User.Application\User.Application.csproj", "{AC335E04-DE7B-477F-BF6E-97FAC983FA8F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "User.IntegrationTests", "tests\User\User.IntegrationTests\User.IntegrationTests.csproj", "{41EFAFAD-DADE-4F33-AA99-5153F90A29CB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "User.IntegrationTests", "tests\User\User.IntegrationTests\User.IntegrationTests.csproj", "{41EFAFAD-DADE-4F33-AA99-5153F90A29CB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{87E2CF1E-C446-4833-8BE1-C63BD19314CC}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{0A256F41-B378-46A5-8CD4-70ADB3619C12}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\user-ci.yml = .github\workflows\user-ci.yml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -280,6 +287,7 @@ Global
 		{9B9C7947-597C-4FFC-9AB2-E102A0A80A89} = {CDA81294-9511-499A-9B4A-91B8E67F4CF0}
 		{AC335E04-DE7B-477F-BF6E-97FAC983FA8F} = {E079281E-92BC-4A5C-A112-EE937440D2D9}
 		{41EFAFAD-DADE-4F33-AA99-5153F90A29CB} = {CDA81294-9511-499A-9B4A-91B8E67F4CF0}
+		{0A256F41-B378-46A5-8CD4-70ADB3619C12} = {87E2CF1E-C446-4833-8BE1-C63BD19314CC}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}
