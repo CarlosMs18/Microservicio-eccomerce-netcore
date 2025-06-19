@@ -3,7 +3,7 @@ name: User CI
 on:
   push:
     branches: [ main ]
-    paths: [ 'Microservicio-netcore-eccomerce/src/User/**', 'Microservicio-netcore-eccomerce/tests/User/**' ]
+    paths: [ 'src/User/**', 'tests/User/**' ]
 
 jobs:
   test:
@@ -19,4 +19,4 @@ jobs:
         dotnet-version: '7.0.x'
         
     - name: Run tests
-      run: dotnet test Microservicio-netcore-eccomerce/tests/User/ --configuration Release --verbosity normal
+      run: dotnet test tests/User/ --configuration Release --verbosity normal
