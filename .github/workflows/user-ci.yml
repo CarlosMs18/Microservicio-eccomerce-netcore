@@ -1,0 +1,16 @@
+name: User CI
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'src/User/**', 'tests/User/**' ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '7.0.x'
+    - run: dotnet test tests/User/ --configuration Release
