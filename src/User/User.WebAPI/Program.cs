@@ -56,6 +56,8 @@ finally
 
 static string DetectEnvironment()
 {
+    if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
+        return "CI";
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
         return "Kubernetes";
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))

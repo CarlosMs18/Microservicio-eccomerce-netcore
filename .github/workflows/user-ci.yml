@@ -1,14 +1,25 @@
 name: User CI
-
 on:
   push:
-    branches: [ main ]
+    branches: [ main , ci-cd]
     paths: [ 'src/User/**', 'tests/User/**' ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: P@ssw0rd123!
+        ports:
+          - 1433:1433
+
+    env:
+      CI: true
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4

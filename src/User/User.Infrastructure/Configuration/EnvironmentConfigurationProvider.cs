@@ -12,6 +12,7 @@ namespace User.Infrastructure.Configuration
                 "Docker" => GetDockerConfig(config),
                 "Kubernetes" => GetKubernetesConfig(config),
                 "Testing" => GetTestingConfig(config),
+                "CI" => GetCIConfig(config),
                 _ => throw new InvalidOperationException($"Entorno {environment} no soportado")
             };
         }
@@ -70,6 +71,62 @@ namespace User.Infrastructure.Configuration
             };
         }
 
+
+        private static UserConfiguration GetCIConfig(IConfiguration config)
+        {
+            var connectionParams = config.GetSection("ConnectionParameters");
+            var poolingParams = config.GetSection("ConnectionPooling");
+            var templates = config.GetSection("ConnectionTemplates");
+
+            var template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["server"] = connectionParams["server"] ?? "localhost,1433",
+                ["database"] = config["User:DatabaseName"] ?? "UserDB_Testing",
+                ["user"] = connectionParams["user"] ?? "sa",
+                ["password"] = connectionParams["password"] ?? "P@ssw0rd123!",
+                ["trust"] = connectionParams["trust"] ?? "true",
+                ["pooling"] = poolingParams["pooling"] ?? "true",
+                ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "50",
+                ["minPoolSize"] = poolingParams["minPoolSize"] ?? "2",
+                ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30",
+                ["commandTimeout"] = poolingParams["commandTimeout"] ?? "60"
+            };
+
+            var connectionString = BuildConnectionString(template, parameters);
+
+            return new UserConfiguration
+            {
+                Environment = "CI",
+                ConnectionString = connectionString,
+                Database = new DatabaseConfiguration
+                {
+                    MaxRetryCount = 5,
+                    MaxRetryDelaySeconds = 30,
+                    EnableDetailedErrors = true, // Habilitado para debugging en CI
+                    EnableSensitiveDataLogging = false // Deshabilitado por seguridad
+                },
+                Logging = new LoggingConfiguration
+                {
+                    MinimumLevel = "Information",
+                    EnableFileLogging = false, // Sin archivos en CI
+                    RetainedFileCountLimit = 0
+                },
+                Identity = new IdentityConfiguration
+                {
+                    RequireUniqueEmail = true,
+                    MaxFailedAccessAttempts = 10, // Más permisivo para tests
+                    LockoutTimeSpanMinutes = 1 // Lockout corto para tests
+                },
+                Grpc = new GrpcConfiguration
+                {
+                    EnableDetailedErrors = true,
+                    MaxMessageSizeMB = 16,
+                    EnableCompression = false // Sin compresión en CI para simplicidad
+                }
+            };
+        }
 
         private static UserConfiguration GetTestingConfig(IConfiguration config)
         {
