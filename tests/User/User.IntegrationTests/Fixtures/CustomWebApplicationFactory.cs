@@ -20,11 +20,11 @@ namespace User.IntegrationTests.Fixtures
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            // 🌍 Detectar entorno dinámicamente (igual que en Program.cs)
+            // 🌍 Detectar entorno simple: solo CI o Testing
             var environment = DetectEnvironment();
             builder.UseEnvironment(environment);
 
-            // 📋 Configurar archivos de configuración según el entorno detectado
+            // 📋 Configurar archivos de configuración
             builder.ConfigureAppConfiguration((context, config) =>
             {
                 config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -34,83 +34,51 @@ namespace User.IntegrationTests.Fixtures
 
             builder.ConfigureServices(services =>
             {
-                // 🧪 Establecer variable de ambiente según el entorno
-                if (environment == "Testing")
-                {
-                    Environment.SetEnvironmentVariable("ASPNETCORE_TESTING", "true");
-                }
+                // 🧪 Variable de ambiente para testing
+                Environment.SetEnvironmentVariable("ASPNETCORE_TESTING", "true");
 
-                // 🗄️ CONFIGURAR BASE DE DATOS DE TEST
+                // 🗄️ Configurar base de datos de test
+                ConfigureDatabaseForTesting(services, environment);
 
-                // 1. Remover el DbContext real
-                var descriptor = services.SingleOrDefault(
-                    d => d.ServiceType == typeof(DbContextOptions<UserIdentityDbContext>));
-                if (descriptor != null)
-                    services.Remove(descriptor);
+                // 🛡️ Configurar Identity para testing
+                ConfigureIdentityForTesting(services);
 
-                // 2. Remover configuración original de UserConfiguration
-                var configDescriptor = services.SingleOrDefault(
-                    d => d.ServiceType == typeof(UserConfiguration));
-                if (configDescriptor != null)
-                    services.Remove(configDescriptor);
-
-                // 3. Configurar BD según el entorno detectado
-                ConfigureDatabaseForEnvironment(services, environment);
-
-                // 4. Asegurarse de que Identity esté configurado correctamente
-                ConfigureIdentityForTesting(services, environment);
-
-                // 🎭 CONFIGURAR MOCKS
+                // 🎭 Configurar mocks
                 services.RemoveAll<IExternalAuthService>();
                 MockExternalAuthService = new Mock<IExternalAuthService>();
                 services.AddSingleton(MockExternalAuthService.Object);
 
-                // 📝 CONFIGURAR LOGGING según el entorno
-                ConfigureLoggingForEnvironment(services, environment);
+                // 📝 Configurar logging simple
+                ConfigureLogging(services, environment);
             });
         }
 
         private static string DetectEnvironment()
         {
-            // Detectar CI/CD primero
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
-                return "CI";
-
-            // Detectar otros entornos containerizados
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
-                return "Kubernetes";
-
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
-                return "Docker";
-
-            // Por defecto para tests locales
-            return "Testing";
+            // Solo CI o Testing - simple y directo
+            return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")) ? "CI" : "Testing";
         }
 
-        private static void ConfigureDatabaseForEnvironment(IServiceCollection services, string environment)
+        private static void ConfigureDatabaseForTesting(IServiceCollection services, string environment)
         {
-            // Crear configuración temporal para obtener connection string
+            // Remover configuraciones existentes
+            services.RemoveAll<DbContextOptions<UserIdentityDbContext>>();
+            services.RemoveAll<UserConfiguration>();
+
+            // Crear configuración temporal
             var configuration = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: false)
                 .AddJsonFile($"appsettings.{environment}.json", optional: true)
                 .AddEnvironmentVariables()
                 .Build();
 
-            // Obtener configuración según el entorno
+            // Obtener configuración según entorno
             var config = EnvironmentConfigurationProvider.GetConfiguration(configuration, environment);
-
-            // Registrar configuración
             services.AddSingleton(config);
-
-            // Log para debugging
-            Console.WriteLine($"🔧 Configurando BD para entorno: {environment}");
-            Console.WriteLine($"🔗 Connection String: {MaskConnectionString(config.ConnectionString)}");
 
             // Configurar DbContext
             services.AddDbContext<UserIdentityDbContext>((serviceProvider, options) =>
             {
-                var logger = serviceProvider.GetRequiredService<ILogger<UserIdentityDbContext>>();
-
                 options.UseSqlServer(config.ConnectionString, sqlOptions =>
                 {
                     sqlOptions.MigrationsAssembly(typeof(UserIdentityDbContext).Assembly.FullName);
@@ -120,121 +88,67 @@ namespace User.IntegrationTests.Fixtures
                         errorNumbersToAdd: null);
                 });
 
-                // Configurar según el entorno
+                // Configuraciones para testing
                 if (config.Database.EnableDetailedErrors)
-                {
                     options.EnableDetailedErrors();
-                }
 
                 if (config.Database.EnableSensitiveDataLogging)
-                {
                     options.EnableSensitiveDataLogging();
-                }
-
-                logger.LogDebug("🧪 Configurando BD para {Environment}: {ConnectionString}",
-                    environment, MaskConnectionString(config.ConnectionString));
             });
         }
 
-        private static void ConfigureIdentityForTesting(IServiceCollection services, string environment)
+        private static void ConfigureIdentityForTesting(IServiceCollection services)
         {
-            // Configurar Identity según el entorno
             services.Configure<IdentityOptions>(options =>
             {
-                if (environment == "Testing")
-                {
-                    // Password requirements más simples para tests locales
-                    options.Password.RequiredLength = 6;
-                    options.Password.RequireNonAlphanumeric = false;
-                    options.Password.RequireDigit = false;
-                    options.Password.RequireLowercase = false;
-                    options.Password.RequireUppercase = false;
+                // Password más simple para tests
+                options.Password.RequiredLength = 6;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequireDigit = false;
+                options.Password.RequireLowercase = false;
+                options.Password.RequireUppercase = false;
 
-                    // Lockout más permisivo para tests
-                    options.Lockout.MaxFailedAccessAttempts = 10;
-                    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(1);
-                }
-                else if (environment == "CI")
-                {
-                    // Password requirements normales para CI
-                    options.Password.RequiredLength = 8;
-                    options.Password.RequireNonAlphanumeric = true;
-                    options.Password.RequireDigit = true;
-                    options.Password.RequireLowercase = true;
-                    options.Password.RequireUppercase = true;
-
-                    // Lockout más permisivo para CI (evitar fallos por timing)
-                    options.Lockout.MaxFailedAccessAttempts = 10;
-                    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(1);
-                }
-
-                // Común para todos los entornos de test
+                // Usuario único por email
                 options.User.RequireUniqueEmail = true;
+
+                // Lockout permisivo para tests
+                options.Lockout.MaxFailedAccessAttempts = 10;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(1);
             });
         }
 
-        private static void ConfigureLoggingForEnvironment(IServiceCollection services, string environment)
+        private static void ConfigureLogging(IServiceCollection services, string environment)
         {
             services.AddLogging(builder =>
             {
                 builder.ClearProviders();
                 builder.AddConsole();
 
-                // Nivel de logging según el entorno
-                var minLevel = environment switch
-                {
-                    "CI" => LogLevel.Information,  // Más logs en CI para debugging
-                    "Testing" => LogLevel.Warning, // Menos logs en tests locales
-                    _ => LogLevel.Warning
-                };
-
-                builder.SetMinimumLevel(minLevel);
-
-                Console.WriteLine($"📝 Configurando logging para {environment} con nivel mínimo: {minLevel}");
+                // Solo Warning para Testing, Information para CI
+                var level = environment == "CI" ? LogLevel.Information : LogLevel.Warning;
+                builder.SetMinimumLevel(level);
             });
-        }
-
-        // Método helper para enmascarar datos sensibles en logs
-        private static string MaskConnectionString(string connectionString)
-        {
-            if (string.IsNullOrEmpty(connectionString))
-                return "N/A";
-
-            // Enmascarar password si existe
-            var masked = connectionString;
-            if (connectionString.Contains("Password="))
-            {
-                var regex = new System.Text.RegularExpressions.Regex(@"Password=([^;]+)",
-                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                masked = regex.Replace(connectionString, "Password=***");
-            }
-
-            return masked;
         }
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                // 🧹 Limpiar recursos
                 MockExternalAuthService?.Reset();
             }
             base.Dispose(disposing);
         }
 
-        // 🛠️ MÉTODO HELPER PARA INICIALIZAR BD EN TESTS
+        // 🛠️ HELPERS PARA TESTS
+
         public async Task<UserIdentityDbContext> GetDbContextAsync()
         {
             var scope = Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<UserIdentityDbContext>();
-
-            // Asegurar que la BD esté creada y migrada
             await context.Database.EnsureCreatedAsync();
-
             return context;
         }
 
-        // 🛠️ MÉTODO HELPER PARA LIMPIAR BD ENTRE TESTS
         public async Task CleanDatabaseAsync()
         {
             using var scope = Services.CreateScope();
@@ -242,38 +156,29 @@ namespace User.IntegrationTests.Fixtures
 
             try
             {
-                // Limpiar tablas en orden correcto (FK constraints)
                 await context.Database.ExecuteSqlRawAsync("DELETE FROM AspNetUserRoles");
                 await context.Database.ExecuteSqlRawAsync("DELETE FROM AspNetUsers");
                 await context.Database.ExecuteSqlRawAsync("DELETE FROM AspNetRoles");
-
-                Console.WriteLine("🧹 Base de datos limpiada correctamente");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"⚠️ Error al limpiar BD: {ex.Message}");
-                // En caso de error, recrear la BD
+                // Si falla, recrear la BD
                 await context.Database.EnsureDeletedAsync();
                 await context.Database.EnsureCreatedAsync();
             }
         }
 
-        // 🛠️ MÉTODO HELPER PARA SEEDEAR DATOS DE TEST
         public async Task SeedTestDataAsync()
         {
             using var scope = Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<UserIdentityDbContext>();
-            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
 
-            // Asegurar que la BD esté creada
             await context.Database.EnsureCreatedAsync();
 
-            // Crear roles por defecto
+            // Crear roles básicos
             await EnsureRoleExistsAsync(roleManager, "User");
             await EnsureRoleExistsAsync(roleManager, "Admin");
-
-            Console.WriteLine("🌱 Datos de test seeded correctamente");
         }
 
         private static async Task EnsureRoleExistsAsync(RoleManager<ApplicationRole> roleManager, string roleName)
@@ -288,7 +193,6 @@ namespace User.IntegrationTests.Fixtures
             }
         }
 
-        // 🛠️ MÉTODO HELPER PARA CREAR USUARIOS DE TEST
         public async Task<ApplicationUser> CreateTestUserAsync(string email, string password, params string[] roles)
         {
             using var scope = Services.CreateScope();
@@ -309,13 +213,11 @@ namespace User.IntegrationTests.Fixtures
                 throw new InvalidOperationException($"Failed to create test user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
             }
 
-            // Asignar roles si se especifican
             if (roles.Length > 0)
             {
                 await userManager.AddToRolesAsync(user, roles);
             }
 
-            Console.WriteLine($"👤 Usuario de test creado: {email}");
             return user;
         }
     }
