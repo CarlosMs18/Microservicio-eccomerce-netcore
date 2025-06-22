@@ -6,6 +6,8 @@ namespace Shared.Core.Extensions
     {
         public static T ApplyAudit<T>(this T entity, string userId, bool isNew) where T : IAuditable
         {
+            Console.WriteLine("ApplyAudit");
+            Console.WriteLine(userId);
             var now = DateTime.UtcNow;
             if (isNew)
             {

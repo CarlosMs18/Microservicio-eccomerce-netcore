@@ -12,7 +12,9 @@ namespace Catalog.Infrastructure.Extensions
     {
         public static async Task EnsureDatabaseAsync(this IServiceProvider services, string environment)
         {
-            if (environment is not ("Development" or "Docker" or "Kubernetes"))
+            Console.WriteLine("EnsureDatabaseasunc");
+            Console.WriteLine(environment);
+            if (environment is not ("Development" or "Docker" or "Kubernetes" or "Testing"))
                 return;
 
             using var scope = services.CreateScope();

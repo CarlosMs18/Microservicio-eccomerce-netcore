@@ -207,3 +207,5 @@ static void ConfigureMiddleware(WebApplication app, string environment)
     app.UseMiddleware<ExceptionMiddleware>();
     app.UseSerilogRequestLogging();
 }
+
+public partial class Program { }

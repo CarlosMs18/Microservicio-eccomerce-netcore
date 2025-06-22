@@ -16,4 +16,21 @@ public static class AuthenticationExtensions
                 options => { });
         return services;
     }
+
+    public static IServiceCollection AddTestingAuthentication(
+        this IServiceCollection services)
+    {
+        // Solo para Testing - bypass de autenticación con usuario fake
+        services.AddAuthentication("Testing")
+            .AddScheme<TestingAuthOptions, TestingAuthHandler>(
+                "Testing",
+                options =>
+                {
+                    // Configurar usuario por defecto para tests
+                    options.DefaultUserId = "test-user-123";
+                    options.DefaultUserEmail = "test@example.com";
+                    options.DefaultUserRoles = "User,Admin";
+                });
+        return services;
+    }
 }

@@ -21,56 +21,106 @@ namespace Shared.Core.Handlers
         private string? GetUserId()
         {
             Console.WriteLine("GETUSERID BASE HANDLER");
-         
+
             var context = _httpContextAccessor.HttpContext;
             if (context == null) return null;
-            Console.WriteLine($"{context.Request.Headers["x-user-id"].ToString()}");
-            Console.WriteLine("Ojito");
-            // ✅ KUBERNETES: Leer desde headers del Ingress
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
-            {
-                return context.Request.Headers["x-user-id"].ToString();
-            }
 
-            // ✅ DEVELOPMENT/DOCKER: Leer desde Claims (middleware)
-            return context.User?.FindFirst(CustomClaimTypes.UID)?.Value;
+            var environment = DetectEnvironment();
+            Console.WriteLine($"Entorno detectado en BaseHandler: {environment}");
+
+            switch (environment)
+            {
+                case "Testing":
+                    // ✅ TESTING: Leer desde Claims (TestingAuthHandler los pone ahí)
+                    var testUserId = context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                  ?? context.User?.FindFirst("user_id")?.Value;
+                    Console.WriteLine($"Testing UserId desde Claims: {testUserId}");
+                    return testUserId;
+
+                case "Kubernetes":
+                    // ✅ KUBERNETES: Leer desde headers del Ingress
+                    var kubeUserId = context.Request.Headers["x-user-id"].ToString();
+                    Console.WriteLine($"Kubernetes UserId desde Headers: {kubeUserId}");
+                    return kubeUserId;
+
+                default: // Development/Docker
+                    // ✅ DEVELOPMENT/DOCKER: Leer desde Claims (middleware)
+                    var devUserId = context.User?.FindFirst(CustomClaimTypes.UID)?.Value;
+                    Console.WriteLine($"Development UserId desde Claims: {devUserId}");
+                    return devUserId;
+            }
         }
 
         private string? GetUserEmail()
         {
             Console.WriteLine("GETUSEREMAIL BASE HANDLER");
+
             var context = _httpContextAccessor.HttpContext;
             if (context == null) return null;
 
-            // ✅ KUBERNETES: Leer desde headers del Ingress
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
-            {
-                return context.Request.Headers["x-user-email"].ToString();
-            }
+            var environment = DetectEnvironment();
 
-            // ✅ DEVELOPMENT/DOCKER: Leer desde Claims (middleware)
-            return context.User?.FindFirst(ClaimTypes.Email)?.Value;
+            switch (environment)
+            {
+                case "Testing":
+                    // ✅ TESTING: Leer desde Claims
+                    return context.User?.FindFirst(ClaimTypes.Email)?.Value;
+
+                case "Kubernetes":
+                    // ✅ KUBERNETES: Leer desde headers del Ingress
+                    return context.Request.Headers["x-user-email"].ToString();
+
+                default: // Development/Docker
+                    // ✅ DEVELOPMENT/DOCKER: Leer desde Claims
+                    return context.User?.FindFirst(ClaimTypes.Email)?.Value;
+            }
         }
 
         private List<string> GetUserRoles()
         {
             Console.WriteLine("GETUSERROLES BASE HANDLER");
+
             var context = _httpContextAccessor.HttpContext;
             if (context == null) return new List<string>();
 
-            // ✅ KUBERNETES: Leer desde headers del Ingress
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
-            {
-                var rolesHeader = context.Request.Headers["x-user-roles"].ToString();
-                return string.IsNullOrEmpty(rolesHeader)
-                    ? new List<string>()
-                    : rolesHeader.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                                 .Select(r => r.Trim())
-                                 .ToList();
-            }
+            var environment = DetectEnvironment();
 
-            // ✅ DEVELOPMENT/DOCKER: Leer desde Claims (middleware)
-            return context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList() ?? new List<string>();
+            switch (environment)
+            {
+                case "Testing":
+                    // ✅ TESTING: Leer desde Claims
+                    return context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
+                           ?? new List<string>();
+
+                case "Kubernetes":
+                    // ✅ KUBERNETES: Leer desde headers del Ingress
+                    var rolesHeader = context.Request.Headers["x-user-roles"].ToString();
+                    return string.IsNullOrEmpty(rolesHeader)
+                        ? new List<string>()
+                        : rolesHeader.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                     .Select(r => r.Trim())
+                                     .ToList();
+
+                default: // Development/Docker
+                    // ✅ DEVELOPMENT/DOCKER: Leer desde Claims
+                    return context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
+                           ?? new List<string>();
+            }
+        }
+
+        // Método helper para detectar entorno (igual al del Program.cs)
+        private string DetectEnvironment()
+        {
+            var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            if (env == "Testing") return "Testing";
+
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+                return "Kubernetes";
+
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
+                return "Docker";
+
+            return "Development";
         }
     }
 }

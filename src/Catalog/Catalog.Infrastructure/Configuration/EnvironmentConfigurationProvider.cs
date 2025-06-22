@@ -9,6 +9,7 @@ namespace Catalog.Infrastructure.Configuration
             return environment switch
             {
                 "Development" => GetDevelopmentConfig(config),
+                "Testing" => GetTestingConfig(config),
                 "Docker" => GetDockerConfig(config),
                 "Kubernetes" => GetKubernetesConfig(config),
                 _ => throw new InvalidOperationException($"Entorno {environment} no soportado")
@@ -17,6 +18,7 @@ namespace Catalog.Infrastructure.Configuration
 
         private static CatalogConfiguration GetDevelopmentConfig(IConfiguration config)
         {
+            Console.WriteLine("GetDevelopmentConfig");
             var connectionParams = config.GetSection("ConnectionParameters");
             var poolingParams = config.GetSection("ConnectionPooling");
             var templates = config.GetSection("ConnectionTemplates");
@@ -59,6 +61,56 @@ namespace Catalog.Infrastructure.Configuration
                     EnableDetailedErrors = true,
                     MaxMessageSizeMB = 4,
                     CompressionLevel = "Optimal"
+                }
+            };
+        }
+
+        private static CatalogConfiguration GetTestingConfig(IConfiguration config)
+        {
+            Console.WriteLine("GetTestingConfig");
+            var connectionParams = config.GetSection("ConnectionParameters");
+            var poolingParams = config.GetSection("ConnectionPooling");
+            var templates = config.GetSection("ConnectionTemplates");
+
+            // Usa el template Local ya que Testing también usa LocalDB
+            var template = templates["Local"] ?? throw new InvalidOperationException("Template Local no encontrado");
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["server"] = connectionParams["server"] ?? "(localdb)\\mssqllocaldb",
+                ["database"] = config["Catalog:DatabaseName"] ?? "CatalogDB_Test",
+                ["trusted"] = connectionParams["trusted"] ?? "true",
+                ["pooling"] = poolingParams["pooling"] ?? "true",
+                ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "10", // Más restrictivo para testing
+                ["minPoolSize"] = poolingParams["minPoolSize"] ?? "1",
+                ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "10", // Timeouts más cortos
+                ["commandTimeout"] = poolingParams["commandTimeout"] ?? "10"
+            };
+
+            var connectionString = BuildConnectionString(template, parameters);
+
+            return new CatalogConfiguration
+            {
+                Environment = "Testing",
+                ConnectionString = connectionString,
+                Database = new DatabaseConfiguration
+                {
+                    MaxRetryCount = 3, // Menos reintentos en testing
+                    MaxRetryDelaySeconds = 10, // Delays más cortos
+                    EnableDetailedErrors = true, // Útil para debugging de tests
+                    EnableSensitiveDataLogging = false // Por seguridad en tests
+                },
+                Logging = new LoggingConfiguration
+                {
+                    MinimumLevel = "Warning", // Solo warnings y errores en tests
+                    EnableFileLogging = false, // Sin archivos de log en testing
+                    RetainedFileCountLimit = 5 // Mínimo si se habilita file logging
+                },
+                Grpc = new GrpcConfiguration
+                {
+                    EnableDetailedErrors = true, // Útil para debugging
+                    MaxMessageSizeMB = 2, // Más restrictivo para tests
+                    CompressionLevel = "Fastest" // Velocidad sobre compresión en tests
                 }
             };
         }
