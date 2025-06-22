@@ -53,10 +53,25 @@ finally
 
 static string DetectEnvironment()
 {
+    var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+    if (env == "Testing")
+    {
+        Log.Information("🧪 Entorno Testing detectado via ASPNETCORE_ENVIRONMENT");
+        return "Testing";
+    }
+
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+    {
+        Log.Information("☸️ Entorno Kubernetes detectado");
         return "Kubernetes";
+    }
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
+    {
+        Log.Information("🐳 Entorno Docker detectado");
         return "Docker";
+    }
+
+    Log.Information("💻 Entorno Development detectado (por defecto)");
     return "Development";
 }
 
@@ -101,7 +116,14 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
     // Servicios de aplicación e infraestructura
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration, environment);
-    if (environment == "Kubernetes")
+
+    if (environment == "Testing")
+    {
+        // Para Testing: Bypass completo con usuario fake
+        builder.Services.AddTestingAuthentication();
+        Log.Information("🧪 Testing Authentication habilitado - Usuario fake: test-user-123");
+    }
+    else if (environment == "Kubernetes")
     {
         // Para Kubernetes: Leer headers del Ingress
         builder.Services.AddApiGatewayAuthentication();
@@ -113,8 +135,9 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
         // No agregamos autenticación aquí porque el middleware maneja todo
         Log.Information("🔐 Autenticación será manejada por TokenGrpcValidationMiddleware");
     }
+
     // Swagger solo para desarrollo
-    if (environment == "Development")
+    if (environment == "Development" || environment == "Testing")
     {
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
@@ -145,7 +168,7 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
 static void ConfigureMiddleware(WebApplication app, string environment)
 {
     // Swagger solo para desarrollo
-    if (environment == "Development")
+    if (environment == "Development" || environment == "Testing")
     {
         app.UseSwagger();
         app.UseSwaggerUI(c =>
@@ -157,8 +180,16 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     app.UseHttpsRedirection();
     app.UseRouting();
-    if (environment == "Kubernetes")
+    if (environment == "Testing")
     {
+        // Para Testing: Usar el sistema de autenticación fake
+        app.UseAuthentication(); // Esto activará el TestingAuthHandler
+        Log.Information("🧪 Testing Authentication middleware habilitado");
+    }
+    else if (environment == "Kubernetes")
+    {
+        // Para Kubernetes: Usar autenticación por headers
+        app.UseAuthentication(); // Esto activará el ApiGatewayAuthHandler
         Log.Information("🔐 ApiGateway Authentication habilitado para Kubernetes");
     }
     else
