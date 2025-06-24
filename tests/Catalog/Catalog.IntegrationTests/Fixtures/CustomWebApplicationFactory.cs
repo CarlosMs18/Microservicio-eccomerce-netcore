@@ -1,48 +1,31 @@
 ﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Catalog.Tests.Integration
+namespace Catalog.IntegrationTests.Fixtures;
+
+public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProgram> where TProgram : class
 {
-    public class CustomApplicationFactory<TStartup> : WebApplicationFactory<TStartup> where TStartup : class
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        // Forzar el ambiente Testing
+        builder.UseEnvironment("Testing");
+
+        // Configurar servicios específicos para testing
+        builder.ConfigureServices(services =>
         {
-            // IMPORTANTE: Configurar el entorno ANTES que todo
-            builder.UseEnvironment("Testing");
-
-            // También configurar la variable de entorno por si acaso
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
-
-            builder.ConfigureAppConfiguration((context, config) =>
+            // Configurar logging más silencioso para tests
+            services.AddLogging(logging =>
             {
-                // Asegurar que el contexto reconozca el entorno Testing
-                context.HostingEnvironment.EnvironmentName = "Testing";
-
-                // Limpiar configuraciones previas y cargar las correctas
-                config.Sources.Clear();
-                config.AddJsonFile("appsettings.json", optional: false)
-                      .AddJsonFile("appsettings.Testing.json", optional: true)
-                      .AddEnvironmentVariables();
+                logging.SetMinimumLevel(LogLevel.Warning); // Solo warnings y errores
             });
 
-            builder.ConfigureServices(services =>
-            {
-                // Configurar logging para pruebas (menos verbose)
-                services.AddLogging(logging =>
-                {
-                    logging.ClearProviders();
-                    logging.AddConsole();
-                    logging.SetMinimumLevel(LogLevel.Warning);
-                });
+            // Aquí puedes override servicios específicos para testing si es necesario
+            // Por ejemplo, mockear servicios externos, cambiar base de datos, etc.
 
-                // Opcional: Si necesitas override de servicios específicos para testing
-                // Por ejemplo, si quieres usar una base de datos en memoria diferente
-                // services.RemoveAll<DbContext>();
-                // services.AddDbContext<YourContext>(options => options.UseInMemoryDatabase("TestDB"));
-            });
-        }
+            // El TestingAuthHandler ya está configurado automáticamente
+            // por el environment "Testing" en tu Program.cs
+        });
     }
 }
