@@ -1,35 +1,30 @@
 ﻿using Catalog.Application.DTOs.Responses;
+using Catalog.IntegrationTests.Builders;
+using Catalog.IntegrationTests.Common;
+using Catalog.IntegrationTests.Extensions;
 using Catalog.IntegrationTests.Fixtures;
-using Microsoft.Extensions.DependencyInjection;
-using Shared.Infrastructure.Authentication;
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 using Xunit;
 
 namespace Catalog.IntegrationTests.Controllers;
 
-public class CategoryControllerTests : IClassFixture<CustomWebApplicationFactory<Program>>
+public class CategoryControllerTests : BaseIntegrationTest
 {
-    private readonly HttpClient _client;
-    private readonly CustomWebApplicationFactory<Program> _factory;
-
-    public CategoryControllerTests(CustomWebApplicationFactory<Program> factory)
+    public CategoryControllerTests(CustomWebApplicationFactory<Program> factory) : base(factory)
     {
-        _factory = factory;
-        _client = factory.CreateClient();
     }
 
     [Fact]
     public async Task GetAllCategories_ShouldReturnOkWithCategories()
     {
         // Act
-        var response = await _client.GetAsync("/api/category");
+        var response = await Client.GetCategoriesAsync();
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var categories = await response.Content.ReadFromJsonAsync<IEnumerable<CategoryListResponse>>();
+        var categories = await response.Content.ReadFromJsonAsync<IEnumerable<CategoryListResponse>>(JsonOptions);
         Assert.NotNull(categories);
 
         // Verificar que la respuesta es una lista (puede estar vacía o con datos)
@@ -40,7 +35,7 @@ public class CategoryControllerTests : IClassFixture<CustomWebApplicationFactory
     public async Task GetAllCategories_ShouldReturnJsonContentType()
     {
         // Act
-        var response = await _client.GetAsync("/api/category");
+        var response = await Client.GetCategoriesAsync();
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -51,7 +46,7 @@ public class CategoryControllerTests : IClassFixture<CustomWebApplicationFactory
     public async Task GetAllCategories_WithInvalidRoute_ShouldReturn404()
     {
         // Act
-        var response = await _client.GetAsync("/api/category/invalid-endpoint");
+        var response = await Client.GetAsync("/api/category/invalid-endpoint");
 
         // Assert
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -60,70 +55,66 @@ public class CategoryControllerTests : IClassFixture<CustomWebApplicationFactory
     [Fact]
     public async Task CreateCategory_WithoutAuthentication_ShouldReturn401()
     {
-        // Arrange - Crear un cliente sin autenticación
-        var clientWithoutAuth = _factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureServices(services =>
-            {
-                // Override para simular usuario no autenticado
-                services.Configure<Shared.Infrastructure.Authentication.TestingAuthOptions>(options =>
-                {
-                    options.DefaultUserId = ""; // Usuario vacío simula no autenticado
-                });
-            });
-        }).CreateClient();
-
-        var createCommand = new
-        {
-            Name = "Test Category",
-            Description = "Test Description"
-        };
+        // Arrange
+        var unauthenticatedClient = CreateUnauthenticatedClient();
+        var categoryData = CategoryTestDataBuilder.Create().WithValidData().Build();
 
         // Act
-        var response = await clientWithoutAuth.PostAsJsonAsync("/api/category/CreateCategory", createCommand);
+        var response = await unauthenticatedClient.PostAsJsonAsync("/api/category/CreateCategory", categoryData);
 
         // Assert
-        // Nota: Dependiendo de tu middleware, podría ser 401 o redirigir
         Assert.True(response.StatusCode == HttpStatusCode.Unauthorized ||
                    response.StatusCode == HttpStatusCode.Forbidden);
     }
 
     [Fact]
-    public async Task CreateCategory_WithInvalidData_ShouldReturn400()
+    public async Task CreateCategory_WithValidData_ShouldReturnCreated()
     {
-        // Arrange - Datos inválidos (nombre vacío)
-        var invalidCommand = new
-        {
-            Name = "", // Nombre vacío debería fallar validación
-            Description = "Test Description"
-        };
+        // Arrange
+        var categoryData = CategoryTestDataBuilder.Create().WithValidData().Build();
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/category/CreateCategory", invalidCommand);
+        var response = await Client.CreateCategoryAsync(categoryData, options: JsonOptions);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateCategory_WithInvalidData_ShouldReturn400()
+    {
+        // Arrange
+        var invalidCategoryData = CategoryTestDataBuilder.Create().WithInvalidData().Build();
+
+        // Act
+        var response = await Client.CreateCategoryAsync(invalidCategoryData, options: JsonOptions);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task CreateCategory_WithMalformedJson_ShouldReturn400()
+    public async Task CreateCategory_WithCustomUser_ShouldReturnCreated()
     {
-        // Arrange - JSON malformado
-        var malformedJson = "{ invalid json }";
-        var content = new StringContent(malformedJson, System.Text.Encoding.UTF8, "application/json");
+        // Arrange
+        var customUserId = "custom-user-456";
+        var categoryData = CategoryTestDataBuilder.Create()
+            .WithName("Custom User Category")
+            .WithDescription("Category created by custom user")
+            .Build();
 
         // Act
-        var response = await _client.PostAsync("/api/category/CreateCategory", content);
+        var response = await Client.CreateCategoryAsync(categoryData, customUserId, JsonOptions);
 
         // Assert
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
     [Fact]
     public async Task GetAllCategories_WithWrongHttpMethod_ShouldReturn405()
     {
         // Act - Usar POST en lugar de GET
-        var response = await _client.PostAsync("/api/category", null);
+        var response = await Client.PostAsync("/api/category", null);
 
         // Assert
         Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
