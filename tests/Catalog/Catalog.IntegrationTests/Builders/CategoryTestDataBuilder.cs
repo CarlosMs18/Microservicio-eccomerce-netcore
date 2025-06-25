@@ -43,12 +43,16 @@ public class CategoryTestDataBuilder
         return this;
     }
 
+    // ✅ CORREGIDO: Ahora coincide con CreateCategoryCommand
     public object Build()
     {
         return new
         {
-            Name = _name,
-            Description = _description
+            Request = new
+            {
+                Name = _name,
+                Description = _description
+            }
         };
     }
 

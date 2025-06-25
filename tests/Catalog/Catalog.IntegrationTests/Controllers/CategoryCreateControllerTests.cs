@@ -1,5 +1,4 @@
-﻿using Catalog.Application.DTOs.Responses;
-using Catalog.IntegrationTests.Builders;
+﻿using Catalog.IntegrationTests.Builders;
 using Catalog.IntegrationTests.Common;
 using Catalog.IntegrationTests.Extensions;
 using Catalog.IntegrationTests.Fixtures;
@@ -9,49 +8,30 @@ using Xunit;
 
 namespace Catalog.IntegrationTests.Controllers;
 
-public class CategoryControllerTests : BaseIntegrationTest
+[Collection("Sequential")]
+public class CategoryCreateControllerTests : BaseIntegrationTest
 {
-    public CategoryControllerTests(CustomWebApplicationFactory<Program> factory) : base(factory)
+    public CategoryCreateControllerTests(CustomWebApplicationFactory<Program> factory) : base(factory)
     {
     }
 
     [Fact]
-    public async Task GetAllCategories_ShouldReturnOkWithCategories()
+    public async Task CreateCategory_SuperSimple_ShouldWork()
     {
-        // Act
-        var response = await Client.GetCategoriesAsync();
+        // Arrange
+        var categoryData = CategoryTestDataBuilder.Create().WithValidData().Build();
+
+        // Act - Usar tu extensión que ya maneja headers
+        var response = await Client.PostAsJsonWithTestUserAsync(
+            "/api/category/CreateCategory",
+            categoryData,
+            "test-user-123",
+            JsonOptions);
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        var categories = await response.Content.ReadFromJsonAsync<IEnumerable<CategoryListResponse>>(JsonOptions);
-        Assert.NotNull(categories);
-
-        // Verificar que la respuesta es una lista (puede estar vacía o con datos)
-        Assert.IsAssignableFrom<IEnumerable<CategoryListResponse>>(categories);
+        Console.WriteLine($"Status: {response.StatusCode}");
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
-
-    [Fact]
-    public async Task GetAllCategories_ShouldReturnJsonContentType()
-    {
-        // Act
-        var response = await Client.GetCategoriesAsync();
-
-        // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("application/json", response.Content.Headers.ContentType?.ToString());
-    }
-
-    [Fact]
-    public async Task GetAllCategories_WithInvalidRoute_ShouldReturn404()
-    {
-        // Act
-        var response = await Client.GetAsync("/api/category/invalid-endpoint");
-
-        // Assert
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
     [Fact]
     public async Task CreateCategory_WithoutAuthentication_ShouldReturn401()
     {
@@ -67,14 +47,16 @@ public class CategoryControllerTests : BaseIntegrationTest
                    response.StatusCode == HttpStatusCode.Forbidden);
     }
 
+    
     [Fact]
     public async Task CreateCategory_WithValidData_ShouldReturnCreated()
     {
         // Arrange
+        var authenticatedClient = CreateClientWithTestUser(); // ✅ Cliente autenticado explícito
         var categoryData = CategoryTestDataBuilder.Create().WithValidData().Build();
 
         // Act
-        var response = await Client.CreateCategoryAsync(categoryData, options: JsonOptions);
+        var response = await authenticatedClient.CreateCategoryAsync(categoryData, options: JsonOptions);
 
         // Assert
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -108,15 +90,5 @@ public class CategoryControllerTests : BaseIntegrationTest
 
         // Assert
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetAllCategories_WithWrongHttpMethod_ShouldReturn405()
-    {
-        // Act - Usar POST en lugar de GET
-        var response = await Client.PostAsync("/api/category", null);
-
-        // Assert
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
 }

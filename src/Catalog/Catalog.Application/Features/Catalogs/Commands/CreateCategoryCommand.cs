@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using MediatR;
 using Shared.Core.Handlers;
 using Shared.Core.Extensions;
+using Catalog.Application.Exceptions;
 
 namespace Catalog.Application.Features.Catalogs.Commands
 {
@@ -28,7 +29,7 @@ namespace Catalog.Application.Features.Catalogs.Commands
             public async Task<CategoryResponse> Handle(CreateCategoryCommand request, CancellationToken cancellationToken)
             {
                 if (await _unitOfWork.CategoryRepository.ExistsByNameAsync(request.Request.Name))
-                    throw new Exception("La categoría ya existe");
+                    throw new BadRequestException("La categoría ya existe");
 
                 var category = new Category
                 {

@@ -19,6 +19,7 @@ public class TestingAuthHandler : AuthenticationHandler<TestingAuthOptions>
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        Logger.LogWarning("🧪 TestingAuthHandler ejecutándose...");
         try
         {
             // En testing, siempre autenticamos exitosamente

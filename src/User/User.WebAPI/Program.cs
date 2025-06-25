@@ -26,6 +26,7 @@ try
 
     // 1. Configuración básica
     var environment = DetectEnvironment();
+    
     ConfigureAppSettings(builder, environment);
     ConfigureSerilog(builder, environment);
 

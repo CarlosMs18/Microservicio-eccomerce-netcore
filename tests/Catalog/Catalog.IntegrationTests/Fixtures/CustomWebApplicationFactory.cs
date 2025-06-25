@@ -10,7 +10,7 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Forzar el ambiente Testing
-        builder.UseEnvironment("Testing");
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
 
         // Configurar servicios específicos para testing
         builder.ConfigureServices(services =>
@@ -18,6 +18,8 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
             // Configurar logging más silencioso para tests
             services.AddLogging(logging =>
             {
+                logging.ClearProviders();
+                logging.AddConsole();   
                 logging.SetMinimumLevel(LogLevel.Warning); // Solo warnings y errores
             });
 

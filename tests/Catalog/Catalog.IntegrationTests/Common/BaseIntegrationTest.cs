@@ -1,11 +1,11 @@
 ﻿using Catalog.IntegrationTests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
-using Xunit;
 
 namespace Catalog.IntegrationTests.Common;
 
-public abstract class BaseIntegrationTest : IClassFixture<CustomWebApplicationFactory<Program>>, IDisposable
+// ✅ REMOVIDO: IClassFixture<CustomWebApplicationFactory<Program>>
+public abstract class BaseIntegrationTest : IDisposable
 {
     protected readonly CustomWebApplicationFactory<Program> Factory;
     protected readonly HttpClient Client;

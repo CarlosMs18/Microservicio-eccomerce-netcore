@@ -22,6 +22,7 @@ try
 
     // 1. Configuración básica
     var environment = DetectEnvironment();
+    Console.WriteLine($"🔍 ENVIRONMENT: {environment}");
     ConfigureAppSettings(builder, environment);
     ConfigureSerilog(builder, environment);
 
@@ -56,6 +57,7 @@ static string DetectEnvironment()
     var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
     if (env == "Testing")
     {
+        Console.WriteLine("🧪 TESTING AUTH CONFIGURADO");
         Log.Information("🧪 Entorno Testing detectado via ASPNETCORE_ENVIRONMENT");
         return "Testing";
     }
