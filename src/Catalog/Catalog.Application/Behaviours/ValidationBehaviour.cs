@@ -1,9 +1,11 @@
 ﻿using FluentValidation;
 using MediatR;
+using Catalog.Application.Exceptions; // 🎯 Importar tu excepción personalizada
 
 namespace Catalog.Application.Behaviours
 {
-    public class ValidationBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse> where TRequest : IRequest<TResponse>
+    public class ValidationBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+        where TRequest : IRequest<TResponse>
     {
         private readonly IEnumerable<IValidator<TRequest>> _validators;
 
@@ -17,18 +19,15 @@ namespace Catalog.Application.Behaviours
             if (_validators.Any())
             {
                 var context = new ValidationContext<TRequest>(request);
-
                 var validationResults = await Task.WhenAll(_validators.Select(v => v.ValidateAsync(context, cancellationToken)));
-
                 var failures = validationResults.SelectMany(r => r.Errors).Where(f => f != null).ToList();
 
                 if (failures.Count != 0)
                 {
-                    throw new ValidationException(failures);
+                    // 🎯 CAMBIO: Lanzar TU ValidationException personalizada, no la de FluentValidation
+                    throw new Catalog.Application.Exceptions.ValidationException(failures);
                 }
-
             }
-
             return await next();
         }
     }

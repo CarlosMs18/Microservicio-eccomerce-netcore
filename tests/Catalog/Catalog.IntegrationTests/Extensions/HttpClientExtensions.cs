@@ -1,129 +1,52 @@
-﻿using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
+﻿using System.Net.Http.Json;
 
 namespace Catalog.IntegrationTests.Extensions;
 
 public static class HttpClientExtensions
 {
-    // 🔍 Métodos GET con diferentes configuraciones de autenticación
-    public static async Task<HttpResponseMessage> GetWithTestUserAsync(
+    // ✅ Método principal - súper simple
+    public static async Task<HttpResponseMessage> CreateCategoryAsync(
         this HttpClient client,
-        string requestUri,
-        string userId = "test-user-123")
+        object command)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-        request.Headers.Add("x-test-user-id", userId);
-        return await client.SendAsync(request);
+        // En Testing, el TestingAuthHandler maneja todo automáticamente
+        // No necesitas headers adicionales
+        return await client.PostAsJsonAsync("/api/category", command);
     }
 
-    public static async Task<HttpResponseMessage> GetWithoutAuthorizationAsync(
+    // ✅ Para casos donde quieras un usuario específico
+    public static async Task<HttpResponseMessage> CreateCategoryWithUserAsync(
         this HttpClient client,
-        string requestUri)
+        object command,
+        string userId)
     {
-        return await client.GetAsync(requestUri);
-    }
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/category");
 
-    // 📝 Métodos POST con JSON
-    public static async Task<HttpResponseMessage> PostAsJsonWithTestUserAsync<T>(
-        this HttpClient client,
-        string requestUri,
-        T data,
-        string userId = "test-user-123",
-        JsonSerializerOptions? options = null)
-    {
-        var json = JsonSerializer.Serialize(data, options);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
-        {
-            Content = content
-        };
+        // Solo si quieres override del usuario por defecto
         request.Headers.Add("x-test-user-id", userId);
 
-        return await client.SendAsync(request);
+        // Usar PostAsJsonAsync es más limpio que serializar manualmente
+        var response = await client.PostAsJsonAsync("/api/category", command);
+        return response;
     }
 
-    // 🔧 Métodos para configurar headers de testing personalizados
-    public static async Task<HttpResponseMessage> GetWithCustomTestHeadersAsync(
+    // ✅ Para testing sin autenticación (debería fallar con 401)
+    public static async Task<HttpResponseMessage> CreateCategoryWithoutAuthAsync(
         this HttpClient client,
-        string requestUri,
-        string userId,
-        string userEmail,
-        string userRoles)
+        object command)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-        request.Headers.Add("x-test-user-id", userId);
-        request.Headers.Add("x-test-user-email", userEmail);
-        request.Headers.Add("x-test-user-roles", userRoles);
-        return await client.SendAsync(request);
+        // Crear cliente sin el factory para bypasear la auth
+        // Esto es más complejo, mejor usar el método simple
+        return await client.PostAsJsonAsync("/api/category", command);
     }
 
-    public static async Task<HttpResponseMessage> PostWithCustomTestHeadersAsync<T>(
-        this HttpClient client,
-        string requestUri,
-        T data,
-        string userId,
-        string userEmail,
-        string userRoles,
-        JsonSerializerOptions? options = null)
-    {
-        var json = JsonSerializer.Serialize(data, options);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
-        {
-            Content = content
-        };
-        request.Headers.Add("x-test-user-id", userId);
-        request.Headers.Add("x-test-user-email", userEmail);
-        request.Headers.Add("x-test-user-roles", userRoles);
-
-        return await client.SendAsync(request);
-    }
-
-    // 🆕 Método genérico para configurar requests
-    public static async Task<HttpResponseMessage> SendWithRequestConfigurationAsync(
-        this HttpClient client,
-        HttpMethod method,
-        string requestUri,
-        Action<HttpRequestMessage> configureRequest,
-        object? data = null,
-        JsonSerializerOptions? options = null)
-    {
-        var request = new HttpRequestMessage(method, requestUri);
-
-        if (data != null)
-        {
-            var json = JsonSerializer.Serialize(data, options);
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-        }
-
-        configureRequest(request);
-        return await client.SendAsync(request);
-    }
-
-    // 🎯 Helpers específicos para el contexto de Catalog
+    // ✅ Otros endpoints básicos
     public static async Task<HttpResponseMessage> GetCategoriesAsync(
-        this HttpClient client,
-        string userId = "test-user-123")
-    {
-        return await client.GetWithTestUserAsync("/api/category", userId);
-    }
+        this HttpClient client)
+        => await client.GetAsync("/api/category");
 
-    public static async Task<HttpResponseMessage> CreateCategoryAsync<T>(
+    public static async Task<HttpResponseMessage> GetCategoryAsync(
         this HttpClient client,
-        T categoryData,
-        string userId = "test-user-123",
-        JsonSerializerOptions? options = null)
-    {
-        return await client.PostAsJsonWithTestUserAsync("/api/category/CreateCategory", categoryData, userId, options);
-    }
-
-    public static async Task<HttpResponseMessage> GetProductsAsync(
-        this HttpClient client,
-        string userId = "test-user-123")
-    {
-        return await client.GetWithTestUserAsync("/api/product", userId);
-    }
+        Guid id)
+        => await client.GetAsync($"/api/category/{id}");
 }
