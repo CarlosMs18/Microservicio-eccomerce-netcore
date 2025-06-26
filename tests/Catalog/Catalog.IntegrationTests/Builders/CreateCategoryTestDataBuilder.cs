@@ -2,30 +2,30 @@
 
 public class CreateCategoryTestDataBuilder
 {
-    private string _name = "Default Category";
+    private string _name = $"Default Category {Guid.NewGuid().ToString()[..8]}";
     private string? _description = "Default description";
 
     // ✅ Método estático para empezar
     public static CreateCategoryTestDataBuilder Create()
         => new CreateCategoryTestDataBuilder();
 
-    // ✅ Datos válidos por defecto
+    // ✅ Datos válidos por defecto CON DATOS DINÁMICOS
     public CreateCategoryTestDataBuilder WithValidData()
     {
-        _name = "Valid Test Category";
+        _name = $"Valid Test Category {DateTime.UtcNow:yyyyMMddHHmmss}";
         _description = "This is a valid test category";
         return this;
     }
 
-    // ✅ Solo nombre (mínimo requerido)
+    // ✅ Solo nombre (mínimo requerido) CON DATOS DINÁMICOS
     public CreateCategoryTestDataBuilder WithMinimalData()
     {
-        _name = "Minimal Category";
+        _name = $"Minimal Category {Guid.NewGuid().ToString()[..8]}";
         _description = null; // Opcional
         return this;
     }
 
-    // ✅ Nombre específico
+    // ✅ Nombre específico (para casos donde SÍ quieres un nombre fijo)
     public CreateCategoryTestDataBuilder WithName(string name)
     {
         _name = name;
@@ -50,6 +50,20 @@ public class CreateCategoryTestDataBuilder
     public CreateCategoryTestDataBuilder WithTooLongName()
     {
         _name = new string('A', 101); // Tu validación es max 100
+        return this;
+    }
+
+    // ✅ Para casos de error - descripción muy larga
+    public CreateCategoryTestDataBuilder WithTooLongDescription()
+    {
+        _description = new string('B', 501); // Tu validación es max 500
+        return this;
+    }
+
+    // ✅ Para casos específicos donde necesitas nombre específico (ej: test de duplicados)
+    public CreateCategoryTestDataBuilder WithSpecificName(string name)
+    {
+        _name = name;
         return this;
     }
 
