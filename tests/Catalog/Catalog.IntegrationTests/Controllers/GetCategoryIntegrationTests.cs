@@ -91,29 +91,52 @@ public class GetCategoryIntegrationTests : BaseIntegrationTest
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest ||
                    response.StatusCode == HttpStatusCode.NotFound);
     }
-
     [Fact]
     public async Task GetCategory_ShouldReturnCorrectStructure()
     {
-        // Arrange - Crear categoría con datos específicos
+        // Arrange - Crear categoría con datos válidos (como el test que funciona)
         var categoryCommand = CreateCategoryTestDataBuilder
             .Create()
-            .WithName("Structure Test Category")
-            .WithDescription("Test description for structure")
+            .WithValidData()  // 🔧 Usar el mismo método que el test exitoso
             .Build();
 
         var createResponse = await Client.CreateCategoryAsync(categoryCommand);
+
+        // 🔍 DEBUG: Verificar que la creación fue exitosa
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
         var createContent = await createResponse.Content.ReadAsStringAsync();
+
+        // 🔍 DEBUG: Ver el contenido de la respuesta
+        Assert.False(string.IsNullOrEmpty(createContent), "Create response content should not be empty");
+
         var createdCategory = JsonSerializer.Deserialize<CategoryResponse>(createContent, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         });
 
+        // 🔍 DEBUG: Verificar que la deserialización funcionó
+        Assert.NotNull(createdCategory);
+        Assert.NotEqual(Guid.Empty, createdCategory.Id);
+
+        // 🔧 FIX: Usar el mismo patrón que el test que funciona
+        var categoryId = GetCategoryTestDataBuilder
+            .Create()
+            .WithValidId(createdCategory.Id)
+            .Build();
+
+        // 🔍 DEBUG: Verificar que el ID es el mismo
+        Assert.Equal(createdCategory.Id, categoryId);
+
         // Act
-        var response = await Client.GetCategoryAsync(createdCategory.Id);
+        var response = await Client.GetCategoryAsync(categoryId);
+
+        // 🔍 DEBUG: Si llega aquí, mostrar el status y contenido antes del assert
+        var debugContent = await response.Content.ReadAsStringAsync();
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.StatusCode == HttpStatusCode.OK,
+            $"Expected OK but got {response.StatusCode}. Response content: {debugContent}");
         Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
 
         var content = await response.Content.ReadAsStringAsync();
