@@ -12,7 +12,7 @@ public class CreateCategoryTestDataBuilder
     // ✅ Datos válidos por defecto CON DATOS DINÁMICOS
     public CreateCategoryTestDataBuilder WithValidData()
     {
-        _name = $"Valid Test Category {DateTime.UtcNow:yyyyMMddHHmmss}";
+        _name = $"Valid Test Category {DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid().ToString()[..4]}";
         _description = "This is a valid test category";
         return this;
     }
