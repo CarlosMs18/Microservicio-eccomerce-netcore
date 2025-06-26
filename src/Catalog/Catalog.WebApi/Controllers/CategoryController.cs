@@ -38,7 +38,7 @@ namespace Catalog.WebAPI.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        //[Authorize]
+        [Authorize]
         [ProducesResponseType(typeof(CategoryResponse), (int)HttpStatusCode.OK)]
         [ProducesResponseType(typeof(ProblemDetails), (int)HttpStatusCode.NotFound)]
         [ProducesResponseType((int)HttpStatusCode.Unauthorized)]
