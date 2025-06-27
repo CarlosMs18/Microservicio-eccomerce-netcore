@@ -1,10 +1,12 @@
-﻿using Catalog.IntegrationTests.Fixtures;
+﻿using Catalog.IntegrationTests.Builders;
+using Catalog.IntegrationTests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
+using Xunit;
 
 namespace Catalog.IntegrationTests.Common;
 
-// ✅ REMOVIDO: IClassFixture<CustomWebApplicationFactory<Program>>
+[Collection("Sequential")] // 🎯 Usar la collection para evitar paralelismo
 public abstract class BaseIntegrationTest : IDisposable
 {
     protected readonly CustomWebApplicationFactory<Program> Factory;
@@ -21,7 +23,19 @@ public abstract class BaseIntegrationTest : IDisposable
     {
         Factory = factory;
         Client = factory.CreateClient();
+
+        // 🧹 Limpiar BD en el constructor
+        CleanDatabaseAsync().GetAwaiter().GetResult();
     }
+
+    // 🧹 Método helper para limpiar BD manualmente si es necesario
+    protected async Task CleanDatabaseAsync()
+    {
+        await Factory.CleanDatabaseAsync();
+    }
+
+    // 🏗️ Helper para crear builder de categorías
+    protected CategoryTestDataBuilder CategoryBuilder() => new();
 
     // 🌍 Helpers para configurar entorno
     protected void SetKubernetesEnvironment(bool isKubernetes = true)
@@ -74,6 +88,7 @@ public abstract class BaseIntegrationTest : IDisposable
     {
         SetKubernetesEnvironment(false); // Reset environment
         SetDockerEnvironment(false); // Reset environment
+        Client?.Dispose();
         GC.SuppressFinalize(this);
     }
 }

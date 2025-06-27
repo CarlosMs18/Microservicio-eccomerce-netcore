@@ -21,6 +21,11 @@ public class GetAllCategoriesIntegrationTests : BaseIntegrationTest
     public async Task GetAllCategories_ShouldReturnOkAndBeOrderedByName()
     {
         // Act
+        await CategoryBuilder()
+         .WithOrderedCategories()
+         .SeedAsync(Factory.Services);
+
+        // Act
         var response = await Client.GetCategoriesAsync();
 
         // Assert
