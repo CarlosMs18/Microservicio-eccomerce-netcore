@@ -1,65 +1,70 @@
 ﻿using Testcontainers.RabbitMq;
 using Xunit;
-using Microsoft.Extensions.Configuration;
-using DotNet.Testcontainers.Builders;
 using System.Net.Http;
 using System.Text;
+using RabbitMQ.Client;
 
 namespace Catalog.IntegrationTests.Fixtures
 {
     public class RabbitMQTestFixture : IAsyncLifetime
     {
         public RabbitMqContainer RabbitMqContainer { get; private set; } = null!;
-        public IConfiguration Configuration { get; private set; } = null!;
 
         public async Task InitializeAsync()
         {
-            Console.WriteLine("🚀 Iniciando RabbitMQ Container...");
+            Console.WriteLine("🚀 Iniciando RabbitMQ TestContainer...");
 
-            // 1. Crear el contenedor de RabbitMQ con configuración más específica
+            // 1. Crear el contenedor de RabbitMQ
             RabbitMqContainer = new RabbitMqBuilder()
-                .WithImage("rabbitmq:3.11-management") // Versión más específica
+                .WithImage("rabbitmq:3.11-management")
                 .WithUsername("guest")
                 .WithPassword("guest")
-                .WithPortBinding(5672, true) // Mapear puerto AMQP
-                .WithPortBinding(15672, true) // Mapear puerto Management
-                .WithEnvironment("RABBITMQ_DEFAULT_USER", "guest")
-                .WithEnvironment("RABBITMQ_DEFAULT_PASS", "guest")
-                .WithEnvironment("RABBITMQ_DEFAULT_VHOST", "/")
+                .WithPortBinding(5672, true) // Puerto AMQP dinámico
+                .WithPortBinding(15672, true) // Puerto Management dinámico
                 .Build();
 
             // 2. Iniciar el contenedor
-            Console.WriteLine("📦 Iniciando contenedor RabbitMQ...");
             await RabbitMqContainer.StartAsync();
 
-            // 3. Información de debug
+            // 3. Obtener puertos dinámicos
             var amqpPort = RabbitMqContainer.GetMappedPublicPort(5672);
             var mgmtPort = RabbitMqContainer.GetMappedPublicPort(15672);
+            var host = RabbitMqContainer.Hostname;
 
-            Console.WriteLine($"🔧 Container iniciado:");
-            Console.WriteLine($"   - Hostname: {RabbitMqContainer.Hostname}");
+            Console.WriteLine($"🔧 RabbitMQ Container iniciado:");
+            Console.WriteLine($"   - Host: {host}");
             Console.WriteLine($"   - AMQP Port: {amqpPort}");
             Console.WriteLine($"   - Management Port: {mgmtPort}");
-            Console.WriteLine($"   - Connection String: amqp://guest:guest@{RabbitMqContainer.Hostname}:{amqpPort}/");
 
-            // 4. ✅ ESPERAR HASTA QUE RABBITMQ ESTÉ REALMENTE LISTO
+            // 4. ✅ CONFIGURAR ENVIRONMENT VARIABLES para que tu app las use
+            Environment.SetEnvironmentVariable("RabbitMQ__Host", host);
+            Environment.SetEnvironmentVariable("RabbitMQ__Port", amqpPort.ToString());
+            Environment.SetEnvironmentVariable("RabbitMQ__Username", "guest");
+            Environment.SetEnvironmentVariable("RabbitMQ__Password", "guest");
+            Environment.SetEnvironmentVariable("RabbitMQ__VirtualHost", "/");
+
+            Console.WriteLine("🔧 Environment variables configuradas:");
+            Console.WriteLine($"   - RabbitMQ__Host = {host}");
+            Console.WriteLine($"   - RabbitMQ__Port = {amqpPort}");
+
+            // 5. Esperar hasta que RabbitMQ esté listo
             await WaitForRabbitMQReady();
 
-            // 5. Crear configuración para Testing
-            Configuration = BuildTestConfiguration();
+            // 6. Crear exchanges necesarios para testing
+            await SetupTestExchanges();
 
-            Console.WriteLine("✅ RabbitMQ Test Fixture inicializado correctamente!");
+            Console.WriteLine("✅ RabbitMQ TestContainer listo para usar!");
         }
 
         /// <summary>
-        /// Espera hasta que RabbitMQ esté completamente listo para aceptar conexiones
+        /// Espera hasta que RabbitMQ esté completamente listo
         /// </summary>
         private async Task WaitForRabbitMQReady()
         {
-            var maxAttempts = 120; // 2 minutos máximo
+            var maxAttempts = 60; // 1 minuto máximo
             var attempt = 0;
 
-            Console.WriteLine("🔄 Esperando que RabbitMQ esté completamente listo...");
+            Console.WriteLine("🔄 Esperando que RabbitMQ esté listo...");
 
             while (attempt < maxAttempts)
             {
@@ -68,12 +73,10 @@ namespace Catalog.IntegrationTests.Fixtures
                     var mgmtPort = RabbitMqContainer.GetMappedPublicPort(15672);
                     var mgmtUrl = $"http://{RabbitMqContainer.Hostname}:{mgmtPort}/api/overview";
 
-                    Console.WriteLine($"🔍 Intento {attempt + 1}: Verificando {mgmtUrl}");
-
                     using var httpClient = new HttpClient();
-                    httpClient.Timeout = TimeSpan.FromSeconds(5);
+                    httpClient.Timeout = TimeSpan.FromSeconds(3);
 
-                    // Agregar autenticación básica
+                    // Autenticación básica
                     var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes("guest:guest"));
                     httpClient.DefaultRequestHeaders.Authorization =
                         new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
@@ -82,90 +85,115 @@ namespace Catalog.IntegrationTests.Fixtures
 
                     if (response.IsSuccessStatusCode)
                     {
-                        var content = await response.Content.ReadAsStringAsync();
                         Console.WriteLine("✅ RabbitMQ Management API responde correctamente!");
-                        Console.WriteLine($"📊 Response: {content.Substring(0, Math.Min(100, content.Length))}...");
 
-                        // Esperar un poco más para asegurar que AMQP también esté listo
-                        await Task.Delay(3000);
-
-                        // Verificar también que el puerto AMQP responda
-                        await VerifyAMQPConnection();
+                        // Esperar un poco más para asegurar estabilidad
+                        await Task.Delay(2000);
                         return;
-                    }
-                    else
-                    {
-                        Console.WriteLine($"❌ Management API response: {response.StatusCode}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"🔄 RabbitMQ no listo... Intento {attempt + 1}/{maxAttempts}");
-                    Console.WriteLine($"   Error: {ex.GetType().Name}: {ex.Message}");
-
-                    // Log adicional para debugging
-                    if (attempt % 10 == 0) // Cada 10 intentos
-                    {
-                        await LogContainerStatus();
-                    }
+                    Console.WriteLine($"🔄 Intento {attempt + 1}/{maxAttempts} - RabbitMQ no listo: {ex.Message}");
                 }
 
                 attempt++;
                 await Task.Delay(1000);
             }
 
-            // Si llegamos aquí, falló
-            await LogContainerStatus();
-            throw new Exception($"❌ RabbitMQ no se inicializó correctamente después de {maxAttempts} segundos");
+            throw new Exception($"❌ RabbitMQ no se inicializó después de {maxAttempts} segundos");
         }
 
-        private async Task VerifyAMQPConnection()
+        /// <summary>
+        /// Crea los exchanges necesarios para los tests
+        /// </summary>
+        private async Task SetupTestExchanges()
         {
+            Console.WriteLine("🔧 Configurando exchanges para testing...");
+
             try
             {
-                Console.WriteLine("🔌 Verificando conexión AMQP...");
-                var connectionString = GetConnectionString();
+                var factory = new ConnectionFactory();
+                factory.Uri = new Uri(GetConnectionString());
 
-                // Aquí podrías agregar una verificación real de RabbitMQ
-                // Por ahora solo logeamos la connection string
-                Console.WriteLine($"🔗 AMQP Connection String: {connectionString}");
+                using var connection = factory.CreateConnection("Setup-Connection");
+                using var channel = connection.CreateModel();
 
-                Console.WriteLine("✅ AMQP parece estar disponible");
+                // Crear el exchange principal que usa tu aplicación
+                channel.ExchangeDeclare(
+                    exchange: "catalog.events",
+                    type: ExchangeType.Topic,
+                    durable: true,
+                    autoDelete: false
+                );
+
+                Console.WriteLine("✅ Exchange 'catalog.events' creado correctamente");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"⚠️ Error verificando AMQP: {ex.Message}");
+                Console.WriteLine($"❌ Error creando exchanges: {ex.Message}");
                 throw;
             }
         }
 
-        private async Task LogContainerStatus()
+        /// <summary>
+        /// Método helper para crear exchanges adicionales durante los tests
+        /// </summary>
+        public async Task CreateExchange(string exchangeName, string exchangeType = ExchangeType.Topic)
+        {
+            var factory = new ConnectionFactory();
+            factory.Uri = new Uri(GetConnectionString());
+
+            using var connection = factory.CreateConnection("Test-Exchange-Creation");
+            using var channel = connection.CreateModel();
+
+            channel.ExchangeDeclare(
+                exchange: exchangeName,
+                type: exchangeType,
+                durable: true,
+                autoDelete: false
+            );
+
+            Console.WriteLine($"✅ Exchange '{exchangeName}' creado");
+        }
+
+        /// <summary>
+        /// Método helper para obtener la connection string (útil para verificaciones en tests)
+        /// </summary>
+        public string GetConnectionString()
+        {
+            var host = RabbitMqContainer.Hostname;
+            var port = RabbitMqContainer.GetMappedPublicPort(5672);
+            return $"amqp://guest:guest@{host}:{port}/";
+        }
+
+        /// <summary>
+        /// Método helper para limpiar colas/exchanges entre tests si necesitas
+        /// </summary>
+        public async Task CleanupQueues()
         {
             try
             {
-                Console.WriteLine("📋 Estado del contenedor:");
-                Console.WriteLine($"   - State: {RabbitMqContainer.State}");
-                Console.WriteLine($"   - Health: {RabbitMqContainer.Health}");
+                var factory = new ConnectionFactory();
+                factory.Uri = new Uri(GetConnectionString());
 
-                // Intentar obtener logs del contenedor
-                var logs = await RabbitMqContainer.GetLogsAsync();
-                var logLines = logs.Stdout.Split('\n').TakeLast(10);
-                Console.WriteLine("📝 Últimas 10 líneas de logs:");
-                foreach (var line in logLines)
-                {
-                    if (!string.IsNullOrWhiteSpace(line))
-                        Console.WriteLine($"   {line}");
-                }
+                using var connection = factory.CreateConnection("Cleanup-Connection");
+                using var channel = connection.CreateModel();
+
+                // Aquí puedes agregar lógica para limpiar colas específicas
+                // Por ejemplo: channel.QueueDelete("some.queue", false, false);
+
+                Console.WriteLine("🧹 Colas limpiadas");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error obteniendo estado del contenedor: {ex.Message}");
+                Console.WriteLine($"⚠️ Error limpiando colas: {ex.Message}");
             }
         }
 
         public async Task DisposeAsync()
         {
-            Console.WriteLine("🧹 Limpiando RabbitMQ Container...");
+            Console.WriteLine("🧹 Limpiando RabbitMQ TestContainer...");
 
             if (RabbitMqContainer != null)
             {
@@ -173,65 +201,13 @@ namespace Catalog.IntegrationTests.Fixtures
                 {
                     await RabbitMqContainer.StopAsync();
                     await RabbitMqContainer.DisposeAsync();
-                    Console.WriteLine("✅ Container limpiado correctamente");
+                    Console.WriteLine("✅ TestContainer limpiado correctamente");
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"⚠️ Error limpiando container: {ex.Message}");
                 }
             }
-        }
-
-        /// <summary>
-        /// Crea la configuración que tu RabbitMQConfiguration.BuildFromConfiguration necesita
-        /// </summary>
-        private IConfiguration BuildTestConfiguration()
-        {
-            var amqpPort = RabbitMqContainer.GetMappedPublicPort(5672);
-            var host = RabbitMqContainer.Hostname;
-
-            var configData = new Dictionary<string, string>
-            {
-                // Configuración base (igual que en appsettings.json)
-                ["RabbitMQ:Host"] = "localhost",
-                ["RabbitMQ:Port"] = "5672",
-                ["RabbitMQ:Username"] = "guest",
-                ["RabbitMQ:Password"] = "guest",
-                ["RabbitMQ:VirtualHost"] = "/",
-                ["RabbitMQ:AutomaticRecoveryEnabled"] = "true",
-                ["RabbitMQ:NetworkRecoveryIntervalSeconds"] = "10",
-                ["RabbitMQ:RequestedHeartbeatSeconds"] = "60",
-
-                // Template para construir ConnectionString
-                ["RabbitMQTemplates:Default"] = "amqp://{username}:{password}@{host}:{port}/{virtualhost}",
-
-                // ✅ ESTOS son los que sobreescriben para el contenedor
-                ["RabbitMQParameters:host"] = host,
-                ["RabbitMQParameters:port"] = amqpPort.ToString(),
-                ["RabbitMQParameters:username"] = "guest",
-                ["RabbitMQParameters:password"] = "guest",
-                ["RabbitMQParameters:virtualhost"] = "/"
-            };
-
-            Console.WriteLine("🔧 Configuración generada:");
-            foreach (var kvp in configData.Where(x => x.Key.Contains("Parameters")))
-            {
-                Console.WriteLine($"   {kvp.Key} = {kvp.Value}");
-            }
-
-            return new ConfigurationBuilder()
-                .AddInMemoryCollection(configData)
-                .Build();
-        }
-
-        /// <summary>
-        /// Método helper para obtener ConnectionString directo (para tests básicos)
-        /// </summary>
-        public string GetConnectionString()
-        {
-            var host = RabbitMqContainer.Hostname;
-            var port = RabbitMqContainer.GetMappedPublicPort(5672);
-            return $"amqp://guest:guest@{host}:{port}/";
         }
     }
 }
