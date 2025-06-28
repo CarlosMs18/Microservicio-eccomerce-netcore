@@ -8,20 +8,28 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Catalog.IntegrationTests.Controllers;
 
 [Collection("Sequential")]
-public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
+public class UpdateProductPriceIntegrationTests : BaseIntegrationTest, IClassFixture<RabbitMQTestFixture>
 {
-    public UpdateProductPriceIntegrationTests(CustomWebApplicationFactory<Program> factory)
-        : base(factory)
+    private readonly RabbitMQTestFixture _rabbitMQFixture;
+    private readonly ITestOutputHelper _output;
+    public UpdateProductPriceIntegrationTests(
+        CustomWebApplicationFactory<Program> factory,
+        ITestOutputHelper output,
+        RabbitMQTestFixture rabbitMQFixture) : base(factory)
     {
+        _rabbitMQFixture = rabbitMQFixture;
+        _output = output;
     }
 
     [Fact]
     public async Task UpdateProductPrice_WithValidData_ShouldReturnOk()
     {
+        _output.WriteLine($"🔍 RabbitMQ ConnectionString: {_rabbitMQFixture.GetConnectionString()}");
         // Arrange - Crear un producto primero para poder actualizarlo
         var productId = await CreateTestProduct();
         var updateCommand = new UpdateProductPriceCommand
@@ -31,18 +39,19 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
         };
 
         // 🔍 DEBUG: Ver exactamente qué se está enviando
-        Console.WriteLine($"=== SENDING UPDATE COMMAND ===");
-        Console.WriteLine($"ProductId: {updateCommand.ProductId}");
-        Console.WriteLine($"NewPrice: {updateCommand.NewPrice}");
+        _output.WriteLine($"=== SENDING UPDATE COMMAND ===");
+        _output.WriteLine($"ProductId: {updateCommand.ProductId}");
+        _output.WriteLine($"NewPrice: {updateCommand.NewPrice}");
 
         // Act
         var response = await Client.PutAsJsonAsync("/api/Product/UpdateProductPrice", updateCommand);
-
+        await Task.Delay(1000); // Dar tiempo para procesar
+        _output.WriteLine("✅ Test completado - revisar logs de RabbitMQ arriba");
         // 🔍 DEBUG: Ver la respuesta completa
         var content = await response.Content.ReadAsStringAsync();
-        Console.WriteLine($"=== RESPONSE ===");
-        Console.WriteLine($"Status: {response.StatusCode}");
-        Console.WriteLine($"Content: {content}");
+        _output.WriteLine($"=== RESPONSE ===");
+        _output.WriteLine($"Status: {response.StatusCode}");
+        _output.WriteLine($"Content: {content}");
 
         // ⭐ NUEVO: Si es BadRequest, mostrar los detalles
         if (response.StatusCode == HttpStatusCode.BadRequest)
@@ -54,13 +63,13 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
                 var badRequestResponse = JsonSerializer.Deserialize<UpdateProductPriceResponse>(content, JsonOptions);
                 if (badRequestResponse != null)
                 {
-                    Console.WriteLine($"Handler Message: {badRequestResponse.Message}");
-                    Console.WriteLine($"Handler Success: {badRequestResponse.Success}");
+                    _output.WriteLine($"Handler Message: {badRequestResponse.Message}");
+                    _output.WriteLine($"Handler Success: {badRequestResponse.Success}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"No se pudo deserializar como UpdateProductPriceResponse: {ex.Message}");
+                _output.WriteLine($"No se pudo deserializar como UpdateProductPriceResponse: {ex.Message}");
             }
         }
 

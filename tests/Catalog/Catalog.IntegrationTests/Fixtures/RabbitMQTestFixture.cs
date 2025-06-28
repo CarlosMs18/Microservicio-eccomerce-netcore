@@ -37,11 +37,11 @@ namespace Catalog.IntegrationTests.Fixtures
             Console.WriteLine($"   - Management Port: {mgmtPort}");
 
             // 4. ✅ CONFIGURAR ENVIRONMENT VARIABLES para que tu app las use
-            Environment.SetEnvironmentVariable("RabbitMQ__Host", host);
-            Environment.SetEnvironmentVariable("RabbitMQ__Port", amqpPort.ToString());
-            Environment.SetEnvironmentVariable("RabbitMQ__Username", "guest");
-            Environment.SetEnvironmentVariable("RabbitMQ__Password", "guest");
-            Environment.SetEnvironmentVariable("RabbitMQ__VirtualHost", "/");
+            Environment.SetEnvironmentVariable("RabbitMQParameters__host", host);
+            Environment.SetEnvironmentVariable("RabbitMQParameters__port", amqpPort.ToString());
+            Environment.SetEnvironmentVariable("RabbitMQParameters__username", "guest");
+            Environment.SetEnvironmentVariable("RabbitMQParameters__password", "guest");
+            Environment.SetEnvironmentVariable("RabbitMQParameters__virtualhost", "/");
 
             Console.WriteLine("🔧 Environment variables configuradas:");
             Console.WriteLine($"   - RabbitMQ__Host = {host}");

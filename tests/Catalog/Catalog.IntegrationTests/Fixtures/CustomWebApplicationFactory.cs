@@ -29,13 +29,13 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
             });
 
             // 🔧 MOCK del EventPublisher para tests
-            var mockEventPublisher = new Mock<IEventPublisher>();
-            mockEventPublisher
-                .Setup(x => x.PublishAsync(It.IsAny<object>(), It.IsAny<CancellationToken>()))
-                .Returns(Task.CompletedTask);
+            //var mockEventPublisher = new Mock<IEventPublisher>();
+            //mockEventPublisher
+            //    .Setup(x => x.PublishAsync(It.IsAny<object>(), It.IsAny<CancellationToken>()))
+            //    .Returns(Task.CompletedTask);
 
-            // Reemplazar el EventPublisher real con el mock
-            services.AddSingleton(mockEventPublisher.Object);
+            //Reemplazar el EventPublisher real con el mock
+            //services.AddSingleton(mockEventPublisher.Object);
 
             // ❌ REMOVE: No necesitamos mockear HttpContextAccessor
             // Tu TestingAuthHandler ya maneja esto correctamente
