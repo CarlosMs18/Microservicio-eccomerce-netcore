@@ -30,7 +30,7 @@ namespace Catalog.Infrastructure.Services.External.Messaging
                 _channel = _connection.CreateModel();
 
                 SetupExchangeAndQueues();
-
+                _logger.LogCritical("🔍 EXCHANGE CONFIGURADO: {ExchangeName}", _exchangeName);
                 _logger.LogInformation("✅ RabbitMQ EventPublisher inicializado correctamente para {ExchangeName}", _exchangeName);
                 _logger.LogDebug("🔧 Configuración: {Host}:{Port}, VHost: {VHost}",
                     _config.Host, _config.Port, _config.VirtualHost);  // ✅ Cambiado a LogDebug

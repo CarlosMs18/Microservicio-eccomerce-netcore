@@ -1,18 +1,14 @@
 ﻿using Catalog.Application;
 using Catalog.Infrastructure;
 using Catalog.Infrastructure.Extensions;
+using Catalog.Infrastructure.Logging; // 🆕 NUEVA REFERENCIA
 using Catalog.WebAPI.Middlewares;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Serilog;
-using Serilog.Events;
-using Serilog.Formatting.Compact;
 using Shared.Infrastructure.Extensions;
 
-// Bootstrap logger
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Debug()
-    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-    .CreateBootstrapLogger();
+// 🎯 BOOTSTRAP LOGGER SIMPLIFICADO
+SerilogConfigurator.ConfigureBootstrapLogger();
 
 try
 {
@@ -24,7 +20,9 @@ try
     var environment = DetectEnvironment();
     Console.WriteLine($"🔍 ENVIRONMENT: {environment}");
     ConfigureAppSettings(builder, environment);
-    ConfigureSerilog(builder, environment);
+
+    // 🎯 CONFIGURACIÓN DE SERILOG SIMPLIFICADA
+    SerilogConfigurator.ConfigureApplicationLogger(builder.Host, environment);
 
     // 2. Servicios
     var (restPort, grpcPort) = ConfigureServices(builder, environment);
@@ -87,46 +85,6 @@ static void ConfigureAppSettings(WebApplicationBuilder builder, string environme
         .AddEnvironmentVariables();
 }
 
-static void ConfigureSerilog(WebApplicationBuilder builder, string environment)
-{
-    builder.Host.UseSerilog((ctx, services, config) =>
-    {
-        // Configuración base
-        var logConfig = config
-            .MinimumLevel.Information()
-            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-            .MinimumLevel.Override("System", LogEventLevel.Warning)
-            .Enrich.FromLogContext();
-
-        // Para Testing: Configuración más verbose
-        if (environment == "Testing")
-        {
-            logConfig
-                .MinimumLevel.Debug()
-                .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
-                .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Information)
-                .MinimumLevel.Override("Catalog", LogEventLevel.Debug)
-                .WriteTo.Console(
-                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}",
-                    restrictedToMinimumLevel: LogEventLevel.Debug)
-                .WriteTo.Debug(
-                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}",
-                    restrictedToMinimumLevel: LogEventLevel.Debug);
-        }
-        else
-        {
-            // Configuración normal para otros entornos
-            logConfig
-                .WriteTo.Async(a => a.Console())
-                .WriteTo.Async(a => a.File(
-                    new CompactJsonFormatter(),
-                    $"logs/{environment.ToLower()}-log-.json",
-                    rollingInterval: RollingInterval.Day,
-                    retainedFileCountLimit: 15));
-        }
-    });
-}
-
 static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder builder, string environment)
 {
     // Configuración de puertos
@@ -144,20 +102,16 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
 
     if (environment == "Testing")
     {
-        // Para Testing: Bypass completo con usuario fake
         builder.Services.AddTestingAuthentication();
         Log.Information("🧪 Testing Authentication habilitado - Usuario fake: test-user-123");
     }
     else if (environment == "Kubernetes")
     {
-        // Para Kubernetes: Leer headers del Ingress
         builder.Services.AddApiGatewayAuthentication();
         Log.Information("🔐 ApiGateway Authentication habilitado para Kubernetes");
     }
     else
     {
-        // Para Development/Docker: El middleware gRPC se encarga
-        // No agregamos autenticación aquí porque el middleware maneja todo
         Log.Information("🔐 Autenticación será manejada por TokenGrpcValidationMiddleware");
     }
 
@@ -205,30 +159,26 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     app.UseHttpsRedirection();
     app.UseRouting();
+
     if (environment == "Testing")
     {
-        // Para Testing: Usar el sistema de autenticación fake
-        app.UseAuthentication(); // Esto activará el TestingAuthHandler
+        app.UseAuthentication();
         Log.Information("🧪 Testing Authentication middleware habilitado");
     }
     else if (environment == "Kubernetes")
     {
-        // Para Kubernetes: Usar autenticación por headers
-        app.UseAuthentication(); // Esto activará el ApiGatewayAuthHandler
+        app.UseAuthentication();
         Log.Information("🔐 ApiGateway Authentication habilitado para Kubernetes");
     }
     else
     {
-        // Development/Docker: Usar middleware gRPC tradicional
         app.UseMiddleware<TokenGrpcValidationMiddleware>();
         Log.Information("🔐 TokenGrpcValidationMiddleware habilitado para entorno: {Environment}", environment);
     }
+
     app.UseAuthorization();
     app.MapControllers();
-
-    // Mapear servicio gRPC
     app.MapGrpcService<Catalog.Infrastructure.Services.External.Grpc.CatalogGrpcService>();
-
     app.UseMiddleware<ExceptionMiddleware>();
     app.UseSerilogRequestLogging();
 }

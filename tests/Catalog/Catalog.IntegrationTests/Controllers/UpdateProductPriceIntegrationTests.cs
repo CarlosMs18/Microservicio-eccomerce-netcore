@@ -10,9 +10,8 @@ using Microsoft.EntityFrameworkCore;
 using Catalog.Infrastructure.Persistence;
 using Catalog.Domain;
 using Xunit.Abstractions;
-using Microsoft.Extensions.Logging;
-using Serilog;
-using Serilog.Events;
+using RabbitMQ.Client;
+using System.Text;
 
 namespace Catalog.IntegrationTests.Controllers;
 
@@ -20,6 +19,9 @@ namespace Catalog.IntegrationTests.Controllers;
 public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
 {
     private readonly ITestOutputHelper _output;
+    private const string EXCHANGE_NAME = "catalog.events"; 
+    private const string QUEUE_NAME = "catalog.product.updated.test";
+    private const string ROUTING_KEY = "catalog.product.updated";
 
     public UpdateProductPriceIntegrationTests(
         CustomWebApplicationFactory<Program> factory,
@@ -31,27 +33,7 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
     [Fact]
     public async Task UpdateProductPrice_WithValidData_ShouldUpdatePriceAndPublishEvent()
     {
-        // 🚀 FORZAR LOGGING DESDE EL INICIO
-        var logEvents = new List<LogEvent>();
-        var testSink = new TestSink(logEvents);
-
-        // Reconfigurar Serilog para GARANTIZAR que capture TODO
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Verbose() // 🎯 VERBOSE para capturar TODO
-            .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
-            .MinimumLevel.Override("System", LogEventLevel.Information)
-            .MinimumLevel.Override("Catalog", LogEventLevel.Verbose) // 🎯 VERBOSE
-            .MinimumLevel.Override("Catalog.Infrastructure", LogEventLevel.Verbose) // 🎯 VERBOSE
-            .MinimumLevel.Override("Catalog.Infrastructure.Services.External.Messaging", LogEventLevel.Verbose) // 🎯 CLAVE
-            .Enrich.FromLogContext()
-            .WriteTo.Sink(testSink) // Capturar en memoria
-            .WriteTo.Console(outputTemplate: "🧪 [{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
-            .WriteTo.Debug(outputTemplate: "🧪 [{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
-            .CreateLogger();
-
-        _output.WriteLine("🔧 Serilog reconfigurado con nivel VERBOSE");
-
-        // Arrange - Crear un producto de prueba primero
+        // Arrange - Crear un producto de prueba
         var testProduct = await CreateTestProductAsync();
         var newPrice = 150.99m;
 
@@ -61,23 +43,21 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
             NewPrice = newPrice
         };
 
+        // 🔧 SETUP: Configurar RabbitMQ antes del test
+        await SetupRabbitMQForTest();
+        _output.WriteLine("🔧 RabbitMQ configurado para el test");
+
         // Crear cliente con usuario autenticado
         var authenticatedClient = CreateClientWithTestUser("test-user-123", "test@example.com");
 
-        // 🎯 LOG DE PRUEBA ANTES DE LA LLAMADA
-        Log.Information("🧪 TEST: Iniciando llamada al endpoint UpdateProductPrice");
-        Log.Information("🧪 TEST: ProductId = {ProductId}, NewPrice = {NewPrice}", testProduct.Id, newPrice);
+        _output.WriteLine($"📡 Iniciando test para ProductId: {testProduct.Id}");
+        _output.WriteLine($"💰 Precio original: {testProduct.Price} -> Nuevo precio: {newPrice}");
 
         // Act - Llamar al endpoint
-        _output.WriteLine("📡 Realizando llamada al endpoint...");
-
         var response = await authenticatedClient.PutAsJsonAsync(
             "/api/Product/UpdateProductPrice",
             command,
             JsonOptions);
-
-        // 🎯 LOG DE PRUEBA DESPUÉS DE LA LLAMADA
-        Log.Information("🧪 TEST: Respuesta recibida con StatusCode = {StatusCode}", response.StatusCode);
 
         // Assert - Verificar respuesta HTTP
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -91,75 +71,155 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
         Assert.Equal(99.99m, result.OldPrice);
         Assert.Equal(newPrice, result.NewPrice);
 
+        _output.WriteLine("✅ Respuesta HTTP validada correctamente");
+
         // Verificar que el precio se actualizó en la base de datos
         await VerifyProductPriceUpdatedInDatabase(testProduct.Id, newPrice);
+        _output.WriteLine("✅ Precio actualizado en base de datos verificado");
 
-        // 🎯 ESPERAR UN POCO PARA QUE LLEGUEN TODOS LOS LOGS ASÍNCRONOS
-        await Task.Delay(1000);
+        // 🎯 VERIFICAR MENSAJE EN RABBITMQ
+        _output.WriteLine("🐰 Esperando evento en RabbitMQ...");
+        await Task.Delay(3000); // Dar más tiempo para procesamiento asíncrono
 
-        // 📊 MOSTRAR LOGS CAPTURADOS - TODOS
-        _output.WriteLine($"📊 Total de logs capturados: {logEvents.Count}");
+        var messages = await GetMessagesFromRabbitMQQueue(QUEUE_NAME);
 
-        foreach (var logEvent in logEvents.OrderBy(x => x.Timestamp))
-        {
-            var source = logEvent.Properties.ContainsKey("SourceContext")
-                ? logEvent.Properties["SourceContext"].ToString().Replace("\"", "")
-                : "Unknown";
+        Assert.Single(messages); // Debe haber exactamente 1 mensaje
+        _output.WriteLine($"🎯 Mensaje encontrado en RabbitMQ: {messages.Count}");
 
-            var message = logEvent.RenderMessage();
-            _output.WriteLine($"📝 [{logEvent.Level}] {source}: {message}");
-        }
+        // Verificar el contenido del evento
+        var eventJson = messages.First();
+        _output.WriteLine($"📄 JSON del evento: {eventJson}");
 
-        // 🐰 BUSCAR LOGS ESPECÍFICOS DE RABBITMQ (más amplio)
-        var rabbitLogs = logEvents.Where(x =>
-        {
-            var message = x.RenderMessage();
-            var sourceContext = x.Properties.ContainsKey("SourceContext")
-                ? x.Properties["SourceContext"].ToString()
-                : "";
+        var eventData = JsonSerializer.Deserialize<ProductPriceChangedEvent>(eventJson, JsonOptions);
 
-            return message.Contains("RabbitMQ") ||
-                   message.Contains("EventPublisher") ||
-                   message.Contains("catalog.events") ||
-                   message.Contains("PUBLISHASYNC") ||
-                   message.Contains("🐰") ||
-                   sourceContext.Contains("RabbitMQ") ||
-                   sourceContext.Contains("EventPublisher") ||
-                   sourceContext.Contains("Messaging");
-        }).ToList();
+        Assert.NotNull(eventData);
+        Assert.Equal(testProduct.Id, eventData.ProductId);
+        Assert.Equal("Test Product", eventData.ProductName);
+        Assert.Equal(99.99m, eventData.OldPrice);
+        Assert.Equal(newPrice, eventData.NewPrice);
+        Assert.Equal("test-user-123", eventData.ChangedBy);
 
-        _output.WriteLine($"🐰 Logs específicos de RabbitMQ encontrados: {rabbitLogs.Count}");
-
-        if (rabbitLogs.Any())
-        {
-            foreach (var log in rabbitLogs.OrderBy(x => x.Timestamp))
-            {
-                _output.WriteLine($"🐰 [{log.Level}] {log.RenderMessage()}");
-            }
-        }
-        else
-        {
-            _output.WriteLine("❌ NO se encontraron logs de RabbitMQ - esto indica un problema de configuración");
-
-            // Mostrar logs que podrían estar relacionados
-            var possibleLogs = logEvents.Where(x =>
-                x.RenderMessage().Contains("Event") ||
-                x.RenderMessage().Contains("Publish") ||
-                x.RenderMessage().Contains("Product")).ToList();
-
-            _output.WriteLine($"🔍 Logs posiblemente relacionados: {possibleLogs.Count}");
-            foreach (var log in possibleLogs)
-            {
-                _output.WriteLine($"🔍 [{log.Level}] {log.RenderMessage()}");
-            }
-        }
-
-        _output.WriteLine("✅ Test completado - Precio actualizado correctamente");
-        _output.WriteLine($"🐰 Evento enviado a RabbitMQ para ProductId: {testProduct.Id}");
-        _output.WriteLine($"💰 Precio actualizado de {result.OldPrice} a {result.NewPrice}");
+        _output.WriteLine("✅ Contenido del evento RabbitMQ validado correctamente");
+        _output.WriteLine($"🎉 Test completado exitosamente!");
+        _output.WriteLine($"   📦 ProductId: {eventData.ProductId}");
+        _output.WriteLine($"   💰 Precio: {eventData.OldPrice} -> {eventData.NewPrice}");
+        _output.WriteLine($"   👤 Usuario: {eventData.ChangedBy}");
+        _output.WriteLine($"   🕐 Fecha: {eventData.ChangedAt}");
     }
 
-    // Helper methods
+    // 🔧 NUEVO: Setup completo de RabbitMQ
+    private async Task SetupRabbitMQForTest()
+    {
+        try
+        {
+            using var connection = CreateRabbitMQConnection();
+            using var channel = connection.CreateModel();
+
+            // 🧹 CLEANUP PREVIO (esto es la clave)
+            try
+            {
+                channel.QueueDelete(QUEUE_NAME, ifUnused: false, ifEmpty: false);
+            }
+            catch { /* Ignorar si no existe */ }
+
+            // 🏗️ CONFIGURACIÓN FRESCA
+            channel.ExchangeDeclare(
+                exchange: EXCHANGE_NAME,
+                type: ExchangeType.Topic,
+                durable: true,
+                autoDelete: false);
+
+            channel.QueueDeclare(
+                queue: QUEUE_NAME,
+                durable: true,
+                exclusive: false,
+                autoDelete: false);
+
+            channel.QueueBind(
+                queue: QUEUE_NAME,
+                exchange: EXCHANGE_NAME,
+                routingKey: ROUTING_KEY);
+
+            // 🧹 LIMPIAR MENSAJES (súper importante)
+            channel.QueuePurge(QUEUE_NAME);
+
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"❌ Error en setup: {ex.Message}");
+            throw;
+        }
+    }
+
+
+    // 🐰 HELPER METHODS PARA RABBITMQ - CORREGIDOS
+    private async Task<List<string>> GetMessagesFromRabbitMQQueue(string queueName)
+    {
+        var messages = new List<string>();
+
+        try
+        {
+            using var connection = CreateRabbitMQConnection();
+            using var channel = connection.CreateModel();
+
+            // Consumir todos los mensajes disponibles
+            int messageCount = 0;
+            while (true)
+            {
+                var result = channel.BasicGet(queueName, autoAck: true);
+                if (result == null) break; // No hay más mensajes
+
+                var message = Encoding.UTF8.GetString(result.Body.ToArray());
+                messages.Add(message);
+                messageCount++;
+
+                _output.WriteLine($"📨 Mensaje {messageCount} obtenido de la cola");
+
+                // Protección contra bucle infinito
+                if (messageCount > 10) break;
+            }
+
+            _output.WriteLine($"📊 Total de mensajes obtenidos: {messages.Count}");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"❌ Error al obtener mensajes: {ex.Message}");
+            throw;
+        }
+
+        return messages;
+    }
+
+    private IConnection CreateRabbitMQConnection()
+    {
+        var factory = new ConnectionFactory()
+        {
+            HostName = "localhost",
+            Port = 5672,
+            UserName = "guest",
+            Password = "guest",
+            VirtualHost = "/",
+            RequestedConnectionTimeout = TimeSpan.FromSeconds(10),
+            RequestedHeartbeat = TimeSpan.FromSeconds(10)
+        };
+
+        try
+        {
+            var connection = factory.CreateConnection();
+            _output.WriteLine("🔗 Conexión a RabbitMQ establecida correctamente");
+            return connection;
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"❌ Error conectando a RabbitMQ: {ex.Message}");
+            _output.WriteLine("💡 Asegúrate de que RabbitMQ esté corriendo en Docker:");
+            _output.WriteLine("   docker run -d --name rabbitmq-local -p 5672:5672 -p 15672:15672 rabbitmq:3-management");
+            throw;
+        }
+    }
+
+    // HELPER METHODS ORIGINALES
     private async Task<Product> CreateTestProductAsync()
     {
         using var scope = Factory.Services.CreateScope();
@@ -192,6 +252,7 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
         context.Products.Add(product);
         await context.SaveChangesAsync();
 
+        _output.WriteLine($"🏭 Producto de prueba creado: {product.Id}");
         return product;
     }
 
@@ -208,18 +269,17 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
     }
 }
 
-// Clase helper para capturar logs
-public class TestSink : Serilog.Core.ILogEventSink
+// 🎯 CLASE PARA DESERIALIZAR EL EVENTO
+public class ProductPriceChangedEvent
 {
-    private readonly List<LogEvent> _logEvents;
-
-    public TestSink(List<LogEvent> logEvents)
-    {
-        _logEvents = logEvents;
-    }
-
-    public void Emit(LogEvent logEvent)
-    {
-        _logEvents.Add(logEvent);
-    }
+    public Guid ProductId { get; set; }
+    public string ProductName { get; set; } = string.Empty;
+    public decimal OldPrice { get; set; }
+    public decimal NewPrice { get; set; }
+    public DateTime ChangedAt { get; set; }
+    public string ChangedBy { get; set; } = string.Empty;
+    public Guid CategoryId { get; set; }
+    public Guid Id { get; set; }
+    public DateTime OccurredAt { get; set; }
+    public string EventType { get; set; } = string.Empty;
 }
