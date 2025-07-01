@@ -102,7 +102,7 @@ namespace Catalog.Infrastructure.Configuration
                 },
                 Logging = new LoggingConfiguration
                 {
-                    MinimumLevel = "Warning", // Solo warnings y errores en tests
+                    MinimumLevel = "Debug", // Solo warnings y errores en tests
                     EnableFileLogging = false, // Sin archivos de log en testing
                     RetainedFileCountLimit = 5 // Mínimo si se habilita file logging
                 },

@@ -91,16 +91,39 @@ static void ConfigureSerilog(WebApplicationBuilder builder, string environment)
 {
     builder.Host.UseSerilog((ctx, services, config) =>
     {
-        config.MinimumLevel.Information()
-              .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-              .MinimumLevel.Override("System", LogEventLevel.Warning)
-              .Enrich.FromLogContext()
-              .WriteTo.Async(a => a.Console())
-              .WriteTo.Async(a => a.File(
-                  new CompactJsonFormatter(),
-                  $"logs/{environment.ToLower()}-log-.json",
-                  rollingInterval: RollingInterval.Day,
-                  retainedFileCountLimit: 15));
+        // Configuración base
+        var logConfig = config
+            .MinimumLevel.Information()
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+            .MinimumLevel.Override("System", LogEventLevel.Warning)
+            .Enrich.FromLogContext();
+
+        // Para Testing: Configuración más verbose
+        if (environment == "Testing")
+        {
+            logConfig
+                .MinimumLevel.Debug()
+                .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+                .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Information)
+                .MinimumLevel.Override("Catalog", LogEventLevel.Debug)
+                .WriteTo.Console(
+                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}",
+                    restrictedToMinimumLevel: LogEventLevel.Debug)
+                .WriteTo.Debug(
+                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}",
+                    restrictedToMinimumLevel: LogEventLevel.Debug);
+        }
+        else
+        {
+            // Configuración normal para otros entornos
+            logConfig
+                .WriteTo.Async(a => a.Console())
+                .WriteTo.Async(a => a.File(
+                    new CompactJsonFormatter(),
+                    $"logs/{environment.ToLower()}-log-.json",
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 15));
+        }
     });
 }
 

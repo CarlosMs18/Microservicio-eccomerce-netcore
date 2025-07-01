@@ -1,9 +1,10 @@
 ﻿using Catalog.Application.Contracts.Messaging;
 using Catalog.Infrastructure.Configuration;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;  // ✅ SOLO este using para logging
 using Newtonsoft.Json;
 using RabbitMQ.Client;
 using System.Text;
+// ❌ REMOVIDO: using Serilog; - Ya no lo necesitas
 
 namespace Catalog.Infrastructure.Services.External.Messaging
 {
@@ -11,7 +12,7 @@ namespace Catalog.Infrastructure.Services.External.Messaging
     {
         private readonly IConnection _connection;
         private readonly IModel _channel;
-        private readonly ILogger<RabbitMQEventPublisher> _logger;
+        private readonly ILogger<RabbitMQEventPublisher> _logger;  // ✅ Ya está correcto
         private readonly RabbitMQConfiguration _config;
         private readonly string _exchangeName;
         private bool _disposed = false;
@@ -32,7 +33,7 @@ namespace Catalog.Infrastructure.Services.External.Messaging
 
                 _logger.LogInformation("✅ RabbitMQ EventPublisher inicializado correctamente para {ExchangeName}", _exchangeName);
                 _logger.LogDebug("🔧 Configuración: {Host}:{Port}, VHost: {VHost}",
-                    _config.Host, _config.Port, _config.VirtualHost);
+                    _config.Host, _config.Port, _config.VirtualHost);  // ✅ Cambiado a LogDebug
             }
             catch (Exception ex)
             {
@@ -43,10 +44,10 @@ namespace Catalog.Infrastructure.Services.External.Messaging
 
         public async Task PublishAsync<T>(T eventMessage, CancellationToken cancellationToken = default) where T : class
         {
-            Console.WriteLine("LLAMANDO AL PUBLISASYNC");
+            _logger.LogDebug("🐰 LLAMANDO AL PUBLISHASYNC");  // ✅ Cambiado a LogDebug
+
             if (_disposed)
                 throw new ObjectDisposedException(nameof(RabbitMQEventPublisher));
-
             if (eventMessage == null)
                 throw new ArgumentNullException(nameof(eventMessage));
 
@@ -54,10 +55,18 @@ namespace Catalog.Infrastructure.Services.External.Messaging
             {
                 var eventName = typeof(T).Name;
                 var routingKey = GenerateRoutingKey(eventName);
-
                 var message = SerializeMessage(eventMessage);
                 var body = Encoding.UTF8.GetBytes(message);
                 var properties = CreateMessageProperties(eventName);
+
+                // 🎯 LOGGING DETALLADO ANTES DEL ENVÍO - TODOS CORREGIDOS
+                _logger.LogDebug("🐰 ===== ENVIANDO EVENTO =====");
+                _logger.LogCritical("📋 Tipo: {EventName}", eventName);  // ✅ LogCritical para que se vea como Fatal
+                _logger.LogInformation("🔑 Routing Key: {RoutingKey}", routingKey);
+                _logger.LogInformation("📨 Exchange: {Exchange}", _exchangeName);
+                _logger.LogInformation("📄 JSON del Evento: {EventJson}",
+                    JsonConvert.SerializeObject(eventMessage, Formatting.Indented));
+                _logger.LogInformation("================================");
 
                 _channel.BasicPublish(
                     exchange: _exchangeName,
@@ -73,7 +82,7 @@ namespace Catalog.Infrastructure.Services.External.Messaging
             catch (Exception ex)
             {
                 _logger.LogError(ex, "❌ Error al publicar evento {EventType}: {ErrorMessage}",
-                    typeof(T).Name, ex.Message);
+                    typeof(T).Name, ex.Message);  // ✅ Cambiado a LogError
                 throw;
             }
         }
@@ -95,7 +104,7 @@ namespace Catalog.Infrastructure.Services.External.Messaging
                 autoDelete: false);
 
             _logger.LogDebug("🔧 Exchanges configurados: {MainExchange} y {DlxExchange}",
-                _exchangeName, $"{_exchangeName}.dlx");
+                _exchangeName, $"{_exchangeName}.dlx");  // ✅ Cambiado a LogDebug
         }
 
         private static string GenerateRoutingKey(string eventName)
@@ -195,7 +204,7 @@ namespace Catalog.Infrastructure.Services.External.Messaging
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "⚠️ Error al cerrar conexión RabbitMQ: {ErrorMessage}", ex.Message);
+                _logger.LogWarning(ex, "⚠️ Error al cerrar conexión RabbitMQ: {ErrorMessage}", ex.Message);  // ✅ Cambiado a LogWarning
             }
             finally
             {

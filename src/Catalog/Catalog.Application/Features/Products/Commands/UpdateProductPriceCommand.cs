@@ -51,6 +51,7 @@ namespace Catalog.Application.Features.Products.Commands
         {
             try
             {
+                Console.WriteLine("Command Update!;");
                 // Validar que tenemos el UserId del contexto
                 if (string.IsNullOrEmpty(UserId))
                 {

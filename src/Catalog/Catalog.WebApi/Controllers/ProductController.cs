@@ -28,6 +28,7 @@ namespace Catalog.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<ActionResult<UpdateProductPriceResponse>> UpdateProductPrice([FromBody] UpdateProductPriceCommand command)
         {
+            Console.WriteLine("Controaldor;");
             var result = await _mediator.Send(command);
 
             if (!result.Success)
