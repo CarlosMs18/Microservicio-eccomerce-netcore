@@ -10,7 +10,7 @@ using System.Text;
 using System.Text.Json;
 using Xunit;
 
-namespace Catalog.IntegrationTests.Controllers;
+namespace Catalog.IntegrationTests.Controllers.Categories;
 
 [Collection("Sequential")]
 public class CreateCategoryIntegrationTests : BaseIntegrationTest
