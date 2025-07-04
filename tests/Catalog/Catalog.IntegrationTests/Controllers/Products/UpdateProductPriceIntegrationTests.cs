@@ -14,17 +14,33 @@ using Xunit.Abstractions;
 namespace Catalog.IntegrationTests.Controllers.Products;
 
 [Collection("Sequential")]
-public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
+public class UpdateProductPriceIntegrationTests : BaseIntegrationTest, IAsyncLifetime
 {
     private readonly ITestOutputHelper _output;
     private readonly RabbitMQTestHelper _rabbitMQHelper;
+    private readonly RabbitMQTestContainerHelper _containerHelper;
 
     public UpdateProductPriceIntegrationTests(
         CustomWebApplicationFactory<Program> factory,
         ITestOutputHelper output) : base(factory)
     {
         _output = output;
-        _rabbitMQHelper = new RabbitMQTestHelper(output);
+        _rabbitMQHelper = new RabbitMQTestHelper(output); // Tu helper original
+        _containerHelper = new RabbitMQTestContainerHelper(output); // Solo para levantar el container
+    }
+
+    // 🆕 SOLO PARA LEVANTAR Y BAJAR EL CONTAINER
+    public async Task InitializeAsync()
+    {
+        _output.WriteLine("🚀 Levantando RabbitMQ TestContainer...");
+        await _containerHelper.StartAsync();
+        _output.WriteLine("✅ RabbitMQ listo - usando tu configuración existente");
+    }
+
+    public async Task DisposeAsync()
+    {
+        _output.WriteLine("🧹 Bajando RabbitMQ TestContainer...");
+        await _containerHelper.DisposeAsync();
     }
 
     [Fact]
@@ -40,7 +56,7 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
             NewPrice = newPrice
         };
 
-        // 🔧 SETUP: Configurar RabbitMQ antes del test
+        // 🔧 SETUP: Usar tu helper original - no cambié nada aquí
         await _rabbitMQHelper.SetupRabbitMQForTestAsync(
             TestConstants.RabbitMQ.EXCHANGE_NAME,
             TestConstants.RabbitMQ.Queues.PRODUCT_PRICE_UPDATE_TEST,
@@ -48,7 +64,7 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
 
         _output.WriteLine("🔧 RabbitMQ configurado para el test");
 
-        // Crear cliente con usuario autenticado
+        // Tu código original - sin cambios
         var authenticatedClient = CreateClientWithTestUser(
             TestConstants.TestUsers.DEFAULT_USER_ID,
             TestConstants.TestUsers.DEFAULT_USER_EMAIL);
@@ -69,7 +85,7 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
         await VerifyProductPriceUpdatedInDatabase(testProduct.Id, newPrice);
         _output.WriteLine("✅ Precio actualizado en base de datos verificado");
 
-        // 🎯 VERIFICAR MENSAJE EN RABBITMQ
+        // 🎯 VERIFICAR MENSAJE EN RABBITMQ - tu código original
         await VerifyRabbitMQEventAsync(testProduct, newPrice);
 
         _output.WriteLine("🎉 Test completado exitosamente!");
@@ -195,5 +211,11 @@ public class UpdateProductPriceIntegrationTests : BaseIntegrationTest
 
         Assert.NotNull(updatedProduct);
         Assert.Equal(expectedPrice, updatedProduct.Price);
+    }
+
+    public override void Dispose()
+    {
+        // El cleanup se hace en DisposeAsync()
+        base.Dispose();
     }
 }
