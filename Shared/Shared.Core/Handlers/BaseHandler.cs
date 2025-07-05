@@ -30,6 +30,13 @@ namespace Shared.Core.Handlers
 
             switch (environment)
             {
+                case "CI":
+                    // ✅ CI: Leer desde Claims (TestingAuthHandler los pone ahí)
+                    var ciUserId = context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                ?? context.User?.FindFirst("user_id")?.Value;
+                    Console.WriteLine($"CI UserId desde Claims: {ciUserId}");
+                    return ciUserId;
+
                 case "Testing":
                     // ✅ TESTING: Leer desde Claims (TestingAuthHandler los pone ahí)
                     var testUserId = context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -62,6 +69,10 @@ namespace Shared.Core.Handlers
 
             switch (environment)
             {
+                case "CI":
+                    // ✅ CI: Leer desde Claims
+                    return context.User?.FindFirst(ClaimTypes.Email)?.Value;
+
                 case "Testing":
                     // ✅ TESTING: Leer desde Claims
                     return context.User?.FindFirst(ClaimTypes.Email)?.Value;
@@ -87,6 +98,11 @@ namespace Shared.Core.Handlers
 
             switch (environment)
             {
+                case "CI":
+                    // ✅ CI: Leer desde Claims
+                    return context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
+                           ?? new List<string>();
+
                 case "Testing":
                     // ✅ TESTING: Leer desde Claims
                     return context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
@@ -108,9 +124,13 @@ namespace Shared.Core.Handlers
             }
         }
 
-        // Método helper para detectar entorno (igual al del Program.cs)
+        // Método helper para detectar entorno (actualizado para incluir CI)
         private string DetectEnvironment()
         {
+            // 🆕 PRIORIDAD 1: Detectar CI primero
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
+                return "CI";
+
             var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             if (env == "Testing") return "Testing";
 

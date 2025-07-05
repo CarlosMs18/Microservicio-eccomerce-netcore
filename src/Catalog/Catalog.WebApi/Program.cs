@@ -52,6 +52,12 @@ finally
 
 static string DetectEnvironment()
 {
+    if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
+    {
+        Console.WriteLine("🚀 CI ENVIRONMENT DETECTADO");
+        Log.Information("🚀 Entorno CI detectado via variable CI");
+        return "CI";
+    }
     var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
     if (env == "Testing")
     {
@@ -100,7 +106,7 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration, environment);
 
-    if (environment == "Testing")
+    if (environment == "Testing" || environment == "CI")
     {
         builder.Services.AddTestingAuthentication();
         Log.Information("🧪 Testing Authentication habilitado - Usuario fake: test-user-123");

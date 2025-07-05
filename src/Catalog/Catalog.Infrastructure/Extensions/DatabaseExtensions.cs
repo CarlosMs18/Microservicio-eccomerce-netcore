@@ -14,7 +14,7 @@ namespace Catalog.Infrastructure.Extensions
         {
             Console.WriteLine("EnsureDatabaseasunc");
             Console.WriteLine(environment);
-            if (environment is not ("Development" or "Docker" or "Kubernetes" or "Testing"))
+            if (environment is not ("Development" or "Docker" or "Kubernetes" or "Testing" or "CI"))
                 return;
 
             using var scope = services.CreateScope();

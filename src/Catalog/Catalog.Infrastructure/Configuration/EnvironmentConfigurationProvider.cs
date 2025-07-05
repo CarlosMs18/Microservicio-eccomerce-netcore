@@ -11,6 +11,7 @@ namespace Catalog.Infrastructure.Configuration
                 "Development" => GetDevelopmentConfig(config),
                 "Testing" => GetTestingConfig(config),
                 "Docker" => GetDockerConfig(config),
+                "CI" => GetCIConfig(config),
                 "Kubernetes" => GetKubernetesConfig(config),
                 _ => throw new InvalidOperationException($"Entorno {environment} no soportado")
             };
@@ -115,6 +116,57 @@ namespace Catalog.Infrastructure.Configuration
             };
         }
 
+        private static CatalogConfiguration GetCIConfig(IConfiguration config)
+        {
+            Console.WriteLine("GetCIConfig");
+            var connectionParams = config.GetSection("ConnectionParameters");
+            var poolingParams = config.GetSection("ConnectionPooling");
+            var templates = config.GetSection("ConnectionTemplates");
+
+            // Usa el template Remote ya que CI usa SQL Server en contenedor
+            var template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["server"] = connectionParams["server"] ?? "localhost,1433",
+                ["database"] = config["Catalog:DatabaseName"] ?? "CatalogDB_CI",
+                ["user"] = connectionParams["user"] ?? "sa",
+                ["password"] = connectionParams["password"] ?? "P@ssw0rd123!",
+                ["trust"] = connectionParams["trust"] ?? "true",
+                ["pooling"] = poolingParams["pooling"] ?? "true",
+                ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "5", // Más restrictivo para CI
+                ["minPoolSize"] = poolingParams["minPoolSize"] ?? "1",
+                ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30", // Timeouts más generosos para CI
+                ["commandTimeout"] = poolingParams["commandTimeout"] ?? "30"
+            };
+
+            var connectionString = BuildConnectionString(template, parameters);
+
+            return new CatalogConfiguration
+            {
+                Environment = "CI",
+                ConnectionString = connectionString,
+                Database = new DatabaseConfiguration
+                {
+                    MaxRetryCount = 5, // Reintentos moderados en CI
+                    MaxRetryDelaySeconds = 30, // Delays generosos para CI
+                    EnableDetailedErrors = true, // Útil para debugging en CI
+                    EnableSensitiveDataLogging = false // Por seguridad en CI
+                },
+                Logging = new LoggingConfiguration
+                {
+                    MinimumLevel = "Information", // Information level para CI
+                    EnableFileLogging = false, // Sin archivos de log en CI
+                    RetainedFileCountLimit = 5 // Mínimo si se habilita file logging
+                },
+                Grpc = new GrpcConfiguration
+                {
+                    EnableDetailedErrors = true, // Útil para debugging en CI
+                    MaxMessageSizeMB = 2, // Más restrictivo para CI
+                    CompressionLevel = "Fastest" // Velocidad sobre compresión en CI
+                }
+            };
+        }
         private static CatalogConfiguration GetDockerConfig(IConfiguration config)
         {
             var connectionParams = config.GetSection("ConnectionParameters");

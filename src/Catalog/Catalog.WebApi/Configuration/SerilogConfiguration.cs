@@ -20,6 +20,7 @@ public static class SerilogConfiguration
         switch (environment)
         {
             case "Testing":
+            case "CI":
                 ConfigureForTesting(config);
                 break;
             case "Development":

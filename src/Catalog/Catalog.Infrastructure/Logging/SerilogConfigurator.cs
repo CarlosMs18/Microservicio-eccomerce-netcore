@@ -72,6 +72,7 @@ public static class SerilogConfigurator
         switch (environment)
         {
             case "Testing":
+            case "CI":
                 // Para testing, ya se configura en ConfigureTestingLogger
                 break;
 
