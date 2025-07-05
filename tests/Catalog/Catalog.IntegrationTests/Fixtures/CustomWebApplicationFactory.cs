@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Catalog.Infrastructure.Persistence;
-using Catalog.Infrastructure.Logging; // 🆕 NUEVA REFERENCIA
+using Catalog.Infrastructure.Logging;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 
@@ -14,16 +14,16 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // 1. Forzar el ambiente Testing
+        // 🌍 Detectar entorno inteligentemente
         var environment = DetectEnvironment();
-        builder.UseEnvironment(environment);
 
-        // 📋 Configurar archivos de configuración
+        // 1. Forzar el ambiente detectado (CI o Testing)
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environment);
+
+        // 2. Configurar appsettings específico para el ambiente detectado
         builder.ConfigureAppConfiguration((context, config) =>
         {
-            config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                  .AddJsonFile($"appsettings.{environment}.json", optional: true)
-                  .AddEnvironmentVariables();
+            config.AddJsonFile($"appsettings.{environment}.json", optional: false, reloadOnChange: true);
         });
 
         // 3. 🎯 CONFIGURACIÓN DE SERILOG SIMPLIFICADA PARA TESTING
@@ -31,10 +31,8 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
         {
             // Configurar Serilog usando la clase centralizada
             SerilogConfigurator.ConfigureTestingLogger(context.Configuration);
-
             // Configurar el sistema de logging de .NET
             SerilogConfigurator.ConfigureNetLogging(services);
-
             // Log de confirmación
             var serviceProvider = services.BuildServiceProvider();
             var logger = serviceProvider.GetService<ILogger<CustomWebApplicationFactory<TProgram>>>();
@@ -45,13 +43,18 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
         builder.UseSerilog(Log.Logger, dispose: false);
     }
 
+    private static string DetectEnvironment()
+    {
+        // 🔍 Detección inteligente del entorno: solo CI o Testing
+        return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")) ? "CI" : "Testing";
+    }
+
     // 🧹 MÉTODO para limpiar la base de datos
     public async Task CleanDatabaseAsync()
     {
         Log.Information("🧹 Iniciando limpieza de base de datos para testing");
         using var scope = Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
-
         try
         {
             await context.ProductImages.ExecuteDeleteAsync();
@@ -74,11 +77,5 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
             // NO cerrar Log.Logger aquí porque otros tests pueden estar usándolo
         }
         base.Dispose(disposing);
-    }
-
-    private static string DetectEnvironment()
-    {
-        // Solo CI o Testing - simple y directo
-        return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")) ? "CI" : "Testing";
     }
 }
