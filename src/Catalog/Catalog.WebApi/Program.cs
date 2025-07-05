@@ -166,7 +166,7 @@ static void ConfigureMiddleware(WebApplication app, string environment)
     app.UseHttpsRedirection();
     app.UseRouting();
 
-    if (environment == "Testing")
+    if (environment == "Testing" || environment == "CI")
     {
         app.UseAuthentication();
         Log.Information("🧪 Testing Authentication middleware habilitado");
