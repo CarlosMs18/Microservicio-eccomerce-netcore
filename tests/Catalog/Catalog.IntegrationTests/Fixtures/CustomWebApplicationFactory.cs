@@ -15,12 +15,15 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // 1. Forzar el ambiente Testing
-        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
+        var environment = DetectEnvironment();
+        builder.UseEnvironment(environment);
 
-        // 2. Configurar appsettings específico para testing
+        // 📋 Configurar archivos de configuración
         builder.ConfigureAppConfiguration((context, config) =>
         {
-            config.AddJsonFile("appsettings.Testing.json", optional: false, reloadOnChange: true);
+            config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                  .AddJsonFile($"appsettings.{environment}.json", optional: true)
+                  .AddEnvironmentVariables();
         });
 
         // 3. 🎯 CONFIGURACIÓN DE SERILOG SIMPLIFICADA PARA TESTING
@@ -71,5 +74,11 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
             // NO cerrar Log.Logger aquí porque otros tests pueden estar usándolo
         }
         base.Dispose(disposing);
+    }
+
+    private static string DetectEnvironment()
+    {
+        // Solo CI o Testing - simple y directo
+        return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")) ? "CI" : "Testing";
     }
 }
