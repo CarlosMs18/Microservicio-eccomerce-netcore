@@ -1,13 +1,9 @@
 ﻿using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Shared.Core.Dtos;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using User.Application.Constants;
-using User.Application.Models;
-using User.Infrastructure.Services;
-using Xunit;
 
 namespace User.UnitTests.Infrastructure.Services
 {
