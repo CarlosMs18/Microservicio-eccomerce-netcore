@@ -53,10 +53,32 @@ finally
 
 static string DetectEnvironment()
 {
+    if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
+    {
+        Console.WriteLine("🚀 CI ENVIRONMENT DETECTADO");
+        Log.Information("🚀 Entorno CI detectado via variable CI");
+        return "CI";
+    }
+    var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+    if (env == "Testing")
+    {
+        Console.WriteLine("🧪 TESTING AUTH CONFIGURADO");
+        Log.Information("🧪 Entorno Testing detectado via ASPNETCORE_ENVIRONMENT");
+        return "Testing";
+    }
+
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+    {
+        Log.Information("☸️ Entorno Kubernetes detectado");
         return "Kubernetes";
+    }
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
+    {
+        Log.Information("🐳 Entorno Docker detectado");
         return "Docker";
+    }
+
+    Log.Information("💻 Entorno Development detectado (por defecto)");
     return "Development";
 }
 
@@ -100,7 +122,13 @@ static int ConfigureServices(WebApplicationBuilder builder, string environment)
     // Servicios de aplicación e infraestructura
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration, environment);
-    if (environment == "Kubernetes")
+
+    if (environment == "Testing" || environment == "CI")
+    {
+        builder.Services.AddTestingAuthentication();
+        Log.Information("🧪 Testing Authentication habilitado - Usuario fake: test-user-123");
+    }
+    else if (environment == "Kubernetes")
     {
         // Para Kubernetes: Leer headers del Ingress
         builder.Services.AddApiGatewayAuthentication();
@@ -112,8 +140,9 @@ static int ConfigureServices(WebApplicationBuilder builder, string environment)
         // No agregamos autenticación aquí porque el middleware maneja todo
         Log.Information("🔐 Autenticación será manejada por TokenGrpcValidationMiddleware");
     }
+
     // Swagger solo para desarrollo
-    if (environment == "Development")
+    if (environment == "Development" || environment == "Testing")
     {
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
@@ -138,7 +167,7 @@ static int ConfigureServices(WebApplicationBuilder builder, string environment)
 static void ConfigureMiddleware(WebApplication app, string environment)
 {
     // Swagger solo para desarrollo
-    if (environment == "Development")
+    if (environment == "Development" || environment == "Testing")
     {
         app.UseSwagger();
         app.UseSwaggerUI(c =>
@@ -150,8 +179,15 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     app.UseHttpsRedirection();
     app.UseRouting();
-    if (environment == "Kubernetes")
+
+    if (environment == "Testing" || environment == "CI")
     {
+        app.UseAuthentication();
+        Log.Information("🧪 Testing Authentication middleware habilitado");
+    }
+    else if (environment == "Kubernetes")
+    {
+        app.UseAuthentication();
         Log.Information("🔐 ApiGateway Authentication habilitado para Kubernetes");
     }
     else
@@ -160,7 +196,7 @@ static void ConfigureMiddleware(WebApplication app, string environment)
         app.UseMiddleware<TokenGrpcValidationMiddleware>();
         Log.Information("🔐 TokenGrpcValidationMiddleware habilitado para entorno: {Environment}", environment);
     }
-    
+
     app.UseAuthorization();
     app.MapControllers();
     app.UseMiddleware<ExceptionMiddleware>();

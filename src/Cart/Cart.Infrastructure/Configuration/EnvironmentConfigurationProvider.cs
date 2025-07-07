@@ -9,7 +9,9 @@ namespace Cart.Infrastructure.Configuration
             return environment switch
             {
                 "Development" => GetDevelopmentConfig(config),
+                "Testing" => GetTestingConfig(config),
                 "Docker" => GetDockerConfig(config),
+                "CI" => GetCIConfig(config),
                 "Kubernetes" => GetKubernetesConfig(config),
                 _ => throw new InvalidOperationException($"Entorno {environment} no soportado")
             };
@@ -53,6 +55,96 @@ namespace Cart.Infrastructure.Configuration
                     MinimumLevel = "Debug",
                     EnableFileLogging = true,
                     RetainedFileCountLimit = 15
+                }
+            };
+        }
+
+        private static CartConfiguration GetTestingConfig(IConfiguration config)
+        {
+            Console.WriteLine("GetTestingConfig");
+            var connectionParams = config.GetSection("ConnectionParameters");
+            var poolingParams = config.GetSection("ConnectionPooling");
+            var templates = config.GetSection("ConnectionTemplates");
+
+            // Usa el template Local ya que Testing también usa LocalDB
+            var template = templates["Local"] ?? throw new InvalidOperationException("Template Local no encontrado");
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["server"] = connectionParams["server"] ?? "(localdb)\\mssqllocaldb",
+                ["database"] = config["Cart:DatabaseName"] ?? "CartDB_Test",
+                ["trusted"] = connectionParams["trusted"] ?? "true",
+                ["pooling"] = poolingParams["pooling"] ?? "true",
+                ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "10", // Más restrictivo para testing
+                ["minPoolSize"] = poolingParams["minPoolSize"] ?? "1",
+                ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "10", // Timeouts más cortos
+                ["commandTimeout"] = poolingParams["commandTimeout"] ?? "10"
+            };
+
+            var connectionString = BuildConnectionString(template, parameters);
+
+            return new CartConfiguration
+            {
+                Environment = "Testing",
+                ConnectionString = connectionString,
+                Database = new DatabaseConfiguration
+                {
+                    MaxRetryCount = 3, // Menos reintentos en testing
+                    MaxRetryDelaySeconds = 10, // Delays más cortos
+                    EnableDetailedErrors = true, // Útil para debugging de tests
+                    EnableSensitiveDataLogging = false // Por seguridad en tests
+                },
+                Logging = new LoggingConfiguration
+                {
+                    MinimumLevel = "Debug", // Solo warnings y errores en tests
+                    EnableFileLogging = false, // Sin archivos de log en testing
+                    RetainedFileCountLimit = 5 // Mínimo si se habilita file logging
+                }
+            };
+        }
+
+        private static CartConfiguration GetCIConfig(IConfiguration config)
+        {
+            Console.WriteLine("GetCIConfig");
+            var connectionParams = config.GetSection("ConnectionParameters");
+            var poolingParams = config.GetSection("ConnectionPooling");
+            var templates = config.GetSection("ConnectionTemplates");
+
+            // Usa el template Remote ya que CI usa SQL Server en contenedor
+            var template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["server"] = connectionParams["server"] ?? "localhost,1433",
+                ["database"] = config["Cart:DatabaseName"] ?? "CartDB_CI",
+                ["user"] = connectionParams["user"] ?? "sa",
+                ["password"] = connectionParams["password"] ?? "P@ssw0rd123!",
+                ["trust"] = connectionParams["trust"] ?? "true",
+                ["pooling"] = poolingParams["pooling"] ?? "true",
+                ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "5", // Más restrictivo para CI
+                ["minPoolSize"] = poolingParams["minPoolSize"] ?? "1",
+                ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30", // Timeouts más generosos para CI
+                ["commandTimeout"] = poolingParams["commandTimeout"] ?? "30"
+            };
+
+            var connectionString = BuildConnectionString(template, parameters);
+
+            return new CartConfiguration
+            {
+                Environment = "CI",
+                ConnectionString = connectionString,
+                Database = new DatabaseConfiguration
+                {
+                    MaxRetryCount = 5, // Reintentos moderados en CI
+                    MaxRetryDelaySeconds = 30, // Delays generosos para CI
+                    EnableDetailedErrors = true, // Útil para debugging en CI
+                    EnableSensitiveDataLogging = false // Por seguridad en CI
+                },
+                Logging = new LoggingConfiguration
+                {
+                    MinimumLevel = "Information", // Information level para CI
+                    EnableFileLogging = false, // Sin archivos de log en CI
+                    RetainedFileCountLimit = 5 // Mínimo si se habilita file logging
                 }
             };
         }

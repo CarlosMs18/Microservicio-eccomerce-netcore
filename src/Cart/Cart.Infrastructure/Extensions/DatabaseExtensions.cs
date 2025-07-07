@@ -12,8 +12,8 @@ namespace Cart.Infrastructure.Extensions
     {
         public static async Task EnsureDatabaseAsync(this IServiceProvider services, string environment)
         {
-            if (environment is not ("Development" or "Docker" or "Kubernetes"))
-                return;
+            if (environment is not ("Development" or "Docker" or "Kubernetes" or "Testing" or "CI"))
+                return; 
 
             using var scope = services.CreateScope();
             var scopedServices = scope.ServiceProvider;
