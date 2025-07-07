@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Cart.Infrastructure.Persistence;
+using Cart.Infrastructure.Extensions;
 
 namespace Cart.IntegrationTests.Fixtures;
 
@@ -22,6 +24,42 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
         {
             config.AddJsonFile($"appsettings.{environment}.json", optional: false, reloadOnChange: true);
         });
+
+        // 3. 🎯 CONFIGURAR SERVICIOS PARA TESTING
+        builder.ConfigureServices(services =>
+        {
+            // 🚫 SOLO REMOVER servicios RabbitMQ - NO agregar nada
+            RemoveRabbitMQServices(services);
+        });
+    }
+
+    private static void RemoveRabbitMQServices(IServiceCollection services)
+    {
+        // 🚫 Remover configuración de RabbitMQ (evita conexiones)
+        var rabbitConfig = services.FirstOrDefault(s => s.ServiceType == typeof(RabbitMQConfiguration));
+        if (rabbitConfig != null) services.Remove(rabbitConfig);
+
+        // ✅ MANTENER ProductPriceChangedConsumer - ProductPriceChangedConsumerTests lo necesita
+        // NO remover: services.Remove(ProductPriceChangedConsumer)
+
+        // 🚫 🎯 REMOVER SOLO el Background Service (causa el error de conexión)
+        var hostedServices = services.Where(s => s.ServiceType == typeof(IHostedService)).ToList();
+        foreach (var service in hostedServices)
+        {
+            // Remover el servicio que trata de conectarse a RabbitMQ
+            if (service.ImplementationType?.Name.Contains("RabbitMQConsumerHostedService") == true ||
+                service.ImplementationType?.Name.Contains("RabbitMQ") == true)
+            {
+                services.Remove(service);
+            }
+        }
+    }
+
+    private static void AddMockRabbitMQServices(IServiceCollection services)
+    {
+        // 🚫 NO AGREGAMOS NADA - Solo suprimimos los servicios RabbitMQ
+        // El consumer se testea por separado en ProductPriceChangedConsumerTests
+        // Los endpoints REST no necesitan RabbitMQ
     }
 
     private static string DetectEnvironment()
@@ -35,7 +73,6 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
     {
         using var scope = Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<CartDbContext>();
-
         try
         {
             await context.CartItems.ExecuteDeleteAsync();
@@ -49,3 +86,6 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
         }
     }
 }
+
+// 🎯 VERSIÓN SIMPLE - Solo suprimir servicios RabbitMQ
+// No necesitas el MockRabbitMQBackgroundService
