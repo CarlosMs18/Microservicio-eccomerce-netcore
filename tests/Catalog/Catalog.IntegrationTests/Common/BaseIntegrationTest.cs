@@ -22,7 +22,9 @@ public abstract class BaseIntegrationTest : IDisposable
     protected BaseIntegrationTest(CustomWebApplicationFactory<Program> factory)
     {
         Factory = factory;
-        Client = factory.CreateClient();
+
+        // 🎯 CAMBIO CLAVE: Cliente por defecto CON autenticación
+        Client = CreateClientWithTestUser();
 
         // 🧹 Limpiar BD en el constructor
         CleanDatabaseAsync().GetAwaiter().GetResult();
@@ -53,35 +55,27 @@ public abstract class BaseIntegrationTest : IDisposable
     // 🧪 Helper para simular diferentes usuarios en tests
     protected HttpClient CreateClientWithTestUser(string userId = "test-user-123", string email = "test@example.com", string roles = "User")
     {
-        return Factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureServices(services =>
-            {
-                services.Configure<Shared.Infrastructure.Authentication.TestingAuthOptions>(options =>
-                {
-                    options.DefaultUserId = userId;
-                    options.DefaultUserEmail = email;
-                    options.DefaultUserRoles = roles;
-                });
-            });
-        }).CreateClient();
+        var client = Factory.CreateClient();
+
+        // ✅ AGREGAR HEADERS DE AUTENTICACIÓN
+        client.DefaultRequestHeaders.Add("x-test-user-id", userId);
+        client.DefaultRequestHeaders.Add("x-test-user-email", email);
+        client.DefaultRequestHeaders.Add("x-test-user-roles", roles);
+
+        return client;
     }
 
     // 🚫 Helper para simular usuario no autenticado
     protected HttpClient CreateUnauthenticatedClient()
     {
-        return Factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureServices(services =>
-            {
-                services.Configure<Shared.Infrastructure.Authentication.TestingAuthOptions>(options =>
-                {
-                    options.DefaultUserId = "";
-                    options.DefaultUserEmail = "";
-                    options.DefaultUserRoles = "";
-                });
-            });
-        }).CreateClient();
+        var client = Factory.CreateClient();
+
+        // 🎯 ASEGURARSE de que NO tenga headers de autenticación
+        client.DefaultRequestHeaders.Remove("x-test-user-id");
+        client.DefaultRequestHeaders.Remove("x-test-user-email");
+        client.DefaultRequestHeaders.Remove("x-test-user-roles");
+
+        return client;
     }
 
     public virtual void Dispose()

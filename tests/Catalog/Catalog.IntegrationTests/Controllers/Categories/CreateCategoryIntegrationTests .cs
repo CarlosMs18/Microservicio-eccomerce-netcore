@@ -218,7 +218,6 @@ public class CreateCategoryIntegrationTests : BaseIntegrationTest
     }
 
 
-    // ✅ USANDO: CreateCategoryWithoutAuthAsync() 
     [Fact]
     public async Task CreateCategory_WithoutAuth_ShouldReturnUnauthorized()
     {
@@ -228,16 +227,14 @@ public class CreateCategoryIntegrationTests : BaseIntegrationTest
             .WithValidData()
             .Build();
 
-        // Act - USANDO tu extensión CreateCategoryWithoutAuthAsync()
-        var response = await Client.CreateCategoryWithoutAuthAsync(categoryCommand);
+        // 🎯 USAR cliente sin autenticación
+        var client = CreateUnauthenticatedClient();
+
+        // Act
+        var response = await client.CreateCategoryWithoutAuthAsync(categoryCommand);
 
         // Assert
-        // Dependiendo de tu configuración, puede ser 401 o 200 si el TestAuthHandler maneja todo
-        // Ajusta según tu implementación
-        Assert.True(response.StatusCode == HttpStatusCode.Unauthorized ||
-                   response.StatusCode == HttpStatusCode.Created);
-
-        Console.WriteLine($"Status without auth: {response.StatusCode}");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     // ✅ TEST COMPLETO: Crear -> Obtener -> Listar

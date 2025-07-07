@@ -4,13 +4,12 @@ namespace Catalog.IntegrationTests.Extensions;
 
 public static class HttpClientExtensions
 {
-    // ✅ Método principal - súper simple
+    // ✅ Método principal para crear categoría (CON autenticación)
     public static async Task<HttpResponseMessage> CreateCategoryAsync(
         this HttpClient client,
         object command)
     {
-        // En Testing, el TestingAuthHandler maneja todo automáticamente
-        // No necesitas headers adicionales
+        // El cliente ya debe tener configurado el header x-test-user-id
         return await client.PostAsJsonAsync("/api/category", command);
     }
 
@@ -20,14 +19,9 @@ public static class HttpClientExtensions
         object command,
         string userId)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/category");
-
-        // Solo si quieres override del usuario por defecto
-        request.Headers.Add("x-test-user-id", userId);
-
-        // Usar PostAsJsonAsync es más limpio que serializar manualmente
-        var response = await client.PostAsJsonAsync("/api/category", command);
-        return response;
+        client.DefaultRequestHeaders.Remove("x-test-user-id");
+        client.DefaultRequestHeaders.Add("x-test-user-id", userId);
+        return await client.PostAsJsonAsync("/api/category", command);
     }
 
     // ✅ Para testing sin autenticación (debería fallar con 401)
@@ -35,8 +29,10 @@ public static class HttpClientExtensions
         this HttpClient client,
         object command)
     {
-        // Crear cliente sin el factory para bypasear la auth
-        // Esto es más complejo, mejor usar el método simple
+        // 🎯 IMPORTANTE: Asegurarse de que NO tenga headers de autenticación
+        client.DefaultRequestHeaders.Remove("x-test-user-id");
+        client.DefaultRequestHeaders.Remove("x-test-user-email");
+        client.DefaultRequestHeaders.Remove("x-test-user-roles");
         return await client.PostAsJsonAsync("/api/category", command);
     }
 
@@ -49,4 +45,24 @@ public static class HttpClientExtensions
         this HttpClient client,
         Guid id)
         => await client.GetAsync($"/api/category/{id}");
+
+    // ✅ Versiones específicas para testing sin autenticación
+    public static async Task<HttpResponseMessage> GetCategoriesWithoutAuthAsync(
+        this HttpClient client)
+    {
+        client.DefaultRequestHeaders.Remove("x-test-user-id");
+        client.DefaultRequestHeaders.Remove("x-test-user-email");
+        client.DefaultRequestHeaders.Remove("x-test-user-roles");
+        return await client.GetAsync("/api/category");
+    }
+
+    public static async Task<HttpResponseMessage> GetCategoryWithoutAuthAsync(
+        this HttpClient client,
+        Guid id)
+    {
+        client.DefaultRequestHeaders.Remove("x-test-user-id");
+        client.DefaultRequestHeaders.Remove("x-test-user-email");
+        client.DefaultRequestHeaders.Remove("x-test-user-roles");
+        return await client.GetAsync($"/api/category/{id}");
+    }
 }

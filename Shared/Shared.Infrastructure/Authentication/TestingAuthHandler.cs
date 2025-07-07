@@ -20,12 +20,20 @@ public class TestingAuthHandler : AuthenticationHandler<TestingAuthOptions>
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         Logger.LogWarning("🧪 TestingAuthHandler ejecutándose...");
+
         try
         {
-            // En testing, siempre autenticamos exitosamente
-            // Puedes override con headers si necesitas usuarios específicos
-            var userId = Request.Headers["x-test-user-id"].FirstOrDefault()
-                         ?? Options.DefaultUserId;
+            // 🎯 CAMBIO CLAVE: Verificar si existe el header requerido
+            var userId = Request.Headers["x-test-user-id"].FirstOrDefault();
+
+            // 🚨 Si NO hay header de usuario, FALLAR la autenticación
+            if (string.IsNullOrEmpty(userId))
+            {
+                Logger.LogWarning("❌ No se encontró header 'x-test-user-id' - Autenticación fallida");
+                return Task.FromResult(AuthenticateResult.Fail("Header de usuario requerido no encontrado"));
+            }
+
+            // ✅ Si hay header, proceder con autenticación exitosa
             var userEmail = Request.Headers["x-test-user-email"].FirstOrDefault()
                            ?? Options.DefaultUserEmail;
             var userRoles = Request.Headers["x-test-user-roles"].FirstOrDefault()
@@ -59,12 +67,12 @@ public class TestingAuthHandler : AuthenticationHandler<TestingAuthOptions>
             var principal = new ClaimsPrincipal(identity);
             var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
-            Logger.LogDebug("Usuario de testing autenticado: {UserId}", userId);
+            Logger.LogDebug("✅ Usuario de testing autenticado: {UserId}", userId);
             return Task.FromResult(AuthenticateResult.Success(ticket));
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error en autenticación de testing");
+            Logger.LogError(ex, "💥 Error en autenticación de testing");
             return Task.FromResult(AuthenticateResult.Fail("Error interno de autenticación"));
         }
     }
