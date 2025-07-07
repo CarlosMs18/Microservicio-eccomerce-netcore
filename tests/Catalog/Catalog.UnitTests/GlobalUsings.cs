@@ -20,4 +20,3 @@ global using Catalog.Application.Features.Categories.Queries;
 
 // Catalog Domain
 global using Catalog.Domain;
-global using Catalog.Domain.Common;
