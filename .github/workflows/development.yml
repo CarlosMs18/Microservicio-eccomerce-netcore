@@ -95,7 +95,7 @@ jobs:
           
           kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
           
-          
+         
           kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s
           
       - name: Install NGINX Ingress Controller
@@ -108,8 +108,8 @@ jobs:
           if [[ "${{ needs.detect-changes.outputs.cart }}" == "true" ]]; then
             echo "Building Cart service..."
             cd src/Cart
-            dotnet publish Cart.WebAPI/Cart.WebAPI.csproj -c Release -o ./publish
-            docker build -t cart-service:dev .
+            dotnet publish Cart.WebAPI/Cart.WebAPI.csproj -c Release -o Cart.WebAPI/publish
+            docker build -t cart-service:dev -f Cart.WebAPI/Dockerfile Cart.WebAPI/
             kind load docker-image cart-service:dev --name netpol-test
             cd ../..
           fi
