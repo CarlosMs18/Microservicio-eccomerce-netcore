@@ -32,7 +32,6 @@ jobs:
               - 'tests/User/**'
               - 'k8s/overlays/development/user/**'
 
-
   ci-tests:
     needs: detect-changes
     runs-on: ubuntu-latest
@@ -68,7 +67,6 @@ jobs:
         if: needs.detect-changes.outputs[matrix.service] == 'true'
         run: dotnet test tests/${{ matrix.service == 'cart' && 'Cart' || matrix.service == 'catalog' && 'Catalog' || 'User' }}/${{ matrix.service == 'cart' && 'Cart' || matrix.service == 'catalog' && 'Catalog' || 'User' }}.IntegrationTests/ --configuration Release --verbosity normal
 
-
   cd-deploy:
     needs: [detect-changes, ci-tests]
     runs-on: ubuntu-latest
@@ -94,9 +92,11 @@ jobs:
         
       - name: Install Calico CNI (for Network Policies)
         run: |
-          kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml
-          kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/custom-resources.yaml
-          kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n calico-system --timeout=300s
+         
+          kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
+          
+          
+          kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s
           
       - name: Install NGINX Ingress Controller
         run: |
@@ -105,7 +105,6 @@ jobs:
           
       - name: Build Changed Services
         run: |
-          
           if [[ "${{ needs.detect-changes.outputs.cart }}" == "true" ]]; then
             echo "Building Cart service..."
             cd src/Cart
@@ -135,12 +134,10 @@ jobs:
           
       - name: Deploy Complete Stack
         run: |
-          
           kubectl apply -k k8s/overlays/development/
           
       - name: Wait for Deployments
         run: |
-          
           kubectl wait --for=condition=ready pod -l app=database --timeout=300s
           kubectl wait --for=condition=ready pod -l app=rabbitmq --timeout=300s
           kubectl wait --for=condition=ready pod -l app=cart --timeout=300s
@@ -163,7 +160,6 @@ jobs:
           
           echo "=== Testing Services ==="
           
-         
           if [[ "${{ needs.detect-changes.outputs.cart }}" == "true" ]]; then
             echo "Testing Cart service..."
             kubectl port-forward svc/cart-service 8080:80 &
@@ -173,7 +169,6 @@ jobs:
             kill $CART_PID
           fi
           
-          
           if [[ "${{ needs.detect-changes.outputs.catalog }}" == "true" ]]; then
             echo "Testing Catalog service..."
             kubectl port-forward svc/catalog-service 8081:80 &
@@ -182,7 +177,6 @@ jobs:
             curl -f http://localhost:8081/health || echo "Catalog service not ready"
             kill $CATALOG_PID
           fi
-          
           
           if [[ "${{ needs.detect-changes.outputs.user }}" == "true" ]]; then
             echo "Testing User service..."
