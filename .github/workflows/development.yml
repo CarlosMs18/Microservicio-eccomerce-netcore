@@ -107,29 +107,23 @@ jobs:
         run: |
           if [[ "${{ needs.detect-changes.outputs.cart }}" == "true" ]]; then
             echo "Building Cart service..."
-            cd src/Cart
-            dotnet publish Cart.WebAPI/Cart.WebAPI.csproj -c Release -o Cart.WebAPI/publish
-            docker build -t cart-service:dev -f Cart.WebAPI/Dockerfile Cart.WebAPI/
+            dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
+            docker build -t cart-service:dev -f src/Cart/Cart.WebAPI/Dockerfile .
             kind load docker-image cart-service:dev --name netpol-test
-            cd ../..
           fi
           
           if [[ "${{ needs.detect-changes.outputs.catalog }}" == "true" ]]; then
             echo "Building Catalog service..."
-            cd src/Catalog
-            dotnet publish Catalog.WebAPI/Catalog.WebAPI.csproj -c Release -o ./publish
-            docker build -t catalog-service:dev .
+            dotnet publish src/Catalog/Catalog.WebAPI/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
+            docker build -t catalog-service:dev -f src/Catalog/Catalog.WebAPI/Dockerfile .
             kind load docker-image catalog-service:dev --name netpol-test
-            cd ../..
           fi
           
           if [[ "${{ needs.detect-changes.outputs.user }}" == "true" ]]; then
             echo "Building User service..."
-            cd src/User
-            dotnet publish User.WebAPI/User.WebAPI.csproj -c Release -o ./publish
-            docker build -t user-service:dev .
+            dotnet publish src/User/User.WebAPI/User.WebAPI.csproj -c Release -o src/User/publish
+            docker build -t user-service:dev -f src/User/User.WebAPI/Dockerfile .
             kind load docker-image user-service:dev --name netpol-test
-            cd ../..
           fi
           
       - name: Deploy Complete Stack
