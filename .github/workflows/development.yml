@@ -132,31 +132,31 @@ jobs:
           
       - name: Wait for Deployments
         run: |
-          kubectl wait --for=condition=ready pod -l app=database --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=rabbitmq --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=cart --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=catalog --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=user --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=sql-server --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=rabbitmq-service -n dev --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=cart-service -n dev --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=catalog-service -n dev --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=user-service -n dev --timeout=300s
           
       - name: Test Deployment
         run: |
           echo "=== Pods Status ==="
-          kubectl get pods -o wide
+          kubectl get pods -o wide --all-namespaces
           
           echo "=== Services Status ==="
-          kubectl get svc
+          kubectl get svc --all-namespaces
           
           echo "=== Ingress Status ==="
-          kubectl get ingress
+          kubectl get ingress -n dev
           
           echo "=== Network Policies ==="
-          kubectl get networkpolicies
+          kubectl get networkpolicies -n dev
           
           echo "=== Testing Services ==="
           
           if [[ "${{ needs.detect-changes.outputs.cart }}" == "true" ]]; then
             echo "Testing Cart service..."
-            kubectl port-forward svc/cart-service 8080:80 &
+            kubectl port-forward svc/cart-service 8080:80 -n dev &
             CART_PID=$!
             sleep 5
             curl -f http://localhost:8080/health || echo "Cart service not ready"
@@ -165,7 +165,7 @@ jobs:
           
           if [[ "${{ needs.detect-changes.outputs.catalog }}" == "true" ]]; then
             echo "Testing Catalog service..."
-            kubectl port-forward svc/catalog-service 8081:80 &
+            kubectl port-forward svc/catalog-service 8081:80 -n dev &
             CATALOG_PID=$!
             sleep 5
             curl -f http://localhost:8081/health || echo "Catalog service not ready"
@@ -174,7 +174,7 @@ jobs:
           
           if [[ "${{ needs.detect-changes.outputs.user }}" == "true" ]]; then
             echo "Testing User service..."
-            kubectl port-forward svc/user-service 8082:80 &
+            kubectl port-forward svc/user-service 8082:80 -n dev &
             USER_PID=$!
             sleep 5
             curl -f http://localhost:8082/health || echo "User service not ready"
