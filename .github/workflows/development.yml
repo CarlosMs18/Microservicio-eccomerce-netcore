@@ -1,0 +1,199 @@
+name: Development CI/CD
+
+on:
+  push:
+    branches: [ main, ci-cd ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      cart: ${{ steps.changes.outputs.cart }}
+      catalog: ${{ steps.changes.outputs.catalog }}
+      user: ${{ steps.changes.outputs.user }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            cart:
+              - 'src/Cart/**'
+              - 'tests/Cart/**'
+              - 'k8s/overlays/development/cart/**'
+            catalog:
+              - 'src/Catalog/**'
+              - 'tests/Catalog/**'
+              - 'k8s/overlays/development/catalog/**'
+            user:
+              - 'src/User/**'
+              - 'tests/User/**'
+              - 'k8s/overlays/development/user/**'
+
+
+  ci-tests:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    if: needs.detect-changes.outputs.cart == 'true' || needs.detect-changes.outputs.catalog == 'true' || needs.detect-changes.outputs.user == 'true'
+    
+    strategy:
+      matrix:
+        service: [cart, catalog, user]
+        
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: P@ssw0rd123!
+        ports:
+          - 1433:1433
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+          
+      - name: Run Unit Tests
+        if: needs.detect-changes.outputs[matrix.service] == 'true'
+        run: dotnet test tests/${{ matrix.service == 'cart' && 'Cart' || matrix.service == 'catalog' && 'Catalog' || 'User' }}/${{ matrix.service == 'cart' && 'Cart' || matrix.service == 'catalog' && 'Catalog' || 'User' }}.UnitTests/ --configuration Release --verbosity normal
+        
+      - name: Run Integration Tests
+        if: needs.detect-changes.outputs[matrix.service] == 'true'
+        run: dotnet test tests/${{ matrix.service == 'cart' && 'Cart' || matrix.service == 'catalog' && 'Catalog' || 'User' }}/${{ matrix.service == 'cart' && 'Cart' || matrix.service == 'catalog' && 'Catalog' || 'User' }}.IntegrationTests/ --configuration Release --verbosity normal
+
+
+  cd-deploy:
+    needs: [detect-changes, ci-tests]
+    runs-on: ubuntu-latest
+    if: needs.detect-changes.outputs.cart == 'true' || needs.detect-changes.outputs.catalog == 'true' || needs.detect-changes.outputs.user == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+          
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: netpol-test
+          config: infra/kind/kind-config.yaml
+          
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        
+      - name: Install Calico CNI (for Network Policies)
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml
+          kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/custom-resources.yaml
+          kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n calico-system --timeout=300s
+          
+      - name: Install NGINX Ingress Controller
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+          kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=300s
+          
+      - name: Build Changed Services
+        run: |
+          
+          if [[ "${{ needs.detect-changes.outputs.cart }}" == "true" ]]; then
+            echo "Building Cart service..."
+            cd src/Cart
+            dotnet publish -c Release -o ./publish
+            docker build -t cart-service:dev .
+            kind load docker-image cart-service:dev --name netpol-test
+            cd ../..
+          fi
+          
+          if [[ "${{ needs.detect-changes.outputs.catalog }}" == "true" ]]; then
+            echo "Building Catalog service..."
+            cd src/Catalog
+            dotnet publish -c Release -o ./publish
+            docker build -t catalog-service:dev .
+            kind load docker-image catalog-service:dev --name netpol-test
+            cd ../..
+          fi
+          
+          if [[ "${{ needs.detect-changes.outputs.user }}" == "true" ]]; then
+            echo "Building User service..."
+            cd src/User
+            dotnet publish -c Release -o ./publish
+            docker build -t user-service:dev .
+            kind load docker-image user-service:dev --name netpol-test
+            cd ../..
+          fi
+          
+      - name: Deploy Complete Stack
+        run: |
+          
+          kubectl apply -k k8s/overlays/development/
+          
+      - name: Wait for Deployments
+        run: |
+          
+          kubectl wait --for=condition=ready pod -l app=database --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=rabbitmq --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=cart --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=catalog --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=user --timeout=300s
+          
+      - name: Test Deployment
+        run: |
+          echo "=== Pods Status ==="
+          kubectl get pods -o wide
+          
+          echo "=== Services Status ==="
+          kubectl get svc
+          
+          echo "=== Ingress Status ==="
+          kubectl get ingress
+          
+          echo "=== Network Policies ==="
+          kubectl get networkpolicies
+          
+          echo "=== Testing Services ==="
+          
+         
+          if [[ "${{ needs.detect-changes.outputs.cart }}" == "true" ]]; then
+            echo "Testing Cart service..."
+            kubectl port-forward svc/cart-service 8080:80 &
+            CART_PID=$!
+            sleep 5
+            curl -f http://localhost:8080/health || echo "Cart service not ready"
+            kill $CART_PID
+          fi
+          
+          
+          if [[ "${{ needs.detect-changes.outputs.catalog }}" == "true" ]]; then
+            echo "Testing Catalog service..."
+            kubectl port-forward svc/catalog-service 8081:80 &
+            CATALOG_PID=$!
+            sleep 5
+            curl -f http://localhost:8081/health || echo "Catalog service not ready"
+            kill $CATALOG_PID
+          fi
+          
+          
+          if [[ "${{ needs.detect-changes.outputs.user }}" == "true" ]]; then
+            echo "Testing User service..."
+            kubectl port-forward svc/user-service 8082:80 &
+            USER_PID=$!
+            sleep 5
+            curl -f http://localhost:8082/health || echo "User service not ready"
+            kill $USER_PID
+          fi
+          
+      - name: Cleanup
+        if: always()
+        run: |
+          kind delete cluster --name netpol-test

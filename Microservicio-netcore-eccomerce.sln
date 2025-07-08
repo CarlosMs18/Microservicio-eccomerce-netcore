@@ -162,17 +162,19 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{87E2
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{0A256F41-B378-46A5-8CD4-70ADB3619C12}"
 	ProjectSection(SolutionItems) = preProject
+		.github\workflows\cart-ci.yml = .github\workflows\cart-ci.yml
 		.github\workflows\catalog-ci.yml = .github\workflows\catalog-ci.yml
+		.github\workflows\development.yml = .github\workflows\development.yml
 		.github\workflows\user-ci.yml = .github\workflows\user-ci.yml
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Catalog.IntegrationTests", "tests\Catalog\Catalog.IntegrationTests\Catalog.IntegrationTests.csproj", "{507C3F02-766E-48C1-ADD3-E0B4CF00A1E1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cart.UnitTests", "tests\Cart\Cart.UnitTests\Cart.UnitTests.csproj", "{EB07C340-ED7C-4C4A-9FBE-842B06E656C7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cart.UnitTests", "tests\Cart\Cart.UnitTests\Cart.UnitTests.csproj", "{EB07C340-ED7C-4C4A-9FBE-842B06E656C7}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Cart", "Cart", "{1724F67F-0084-4C78-8DA2-0DE13B458A48}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cart.IntegrationTests", "tests\Cart\Cart.IntegrationTests\Cart.IntegrationTests.csproj", "{781C3C4E-982A-401C-8F45-2E667A0A9B12}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cart.IntegrationTests", "tests\Cart\Cart.IntegrationTests\Cart.IntegrationTests.csproj", "{781C3C4E-982A-401C-8F45-2E667A0A9B12}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
