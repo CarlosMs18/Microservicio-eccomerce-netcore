@@ -92,7 +92,7 @@ jobs:
         
       - name: Install Calico CNI (for Network Policies)
         run: |
-         
+          
           kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
           
           
@@ -108,7 +108,7 @@ jobs:
           if [[ "${{ needs.detect-changes.outputs.cart }}" == "true" ]]; then
             echo "Building Cart service..."
             cd src/Cart
-            dotnet publish -c Release -o ./publish
+            dotnet publish Cart.WebAPI/Cart.WebAPI.csproj -c Release -o ./publish
             docker build -t cart-service:dev .
             kind load docker-image cart-service:dev --name netpol-test
             cd ../..
@@ -117,7 +117,7 @@ jobs:
           if [[ "${{ needs.detect-changes.outputs.catalog }}" == "true" ]]; then
             echo "Building Catalog service..."
             cd src/Catalog
-            dotnet publish -c Release -o ./publish
+            dotnet publish Catalog.WebAPI/Catalog.WebAPI.csproj -c Release -o ./publish
             docker build -t catalog-service:dev .
             kind load docker-image catalog-service:dev --name netpol-test
             cd ../..
@@ -126,7 +126,7 @@ jobs:
           if [[ "${{ needs.detect-changes.outputs.user }}" == "true" ]]; then
             echo "Building User service..."
             cd src/User
-            dotnet publish -c Release -o ./publish
+            dotnet publish User.WebAPI/User.WebAPI.csproj -c Release -o ./publish
             docker build -t user-service:dev .
             kind load docker-image user-service:dev --name netpol-test
             cd ../..
