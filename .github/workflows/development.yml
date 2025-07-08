@@ -131,9 +131,9 @@ jobs:
           kubectl apply -k k8s/overlays/development/
           
       - name: Wait for Deployments
-        run: |
-          kubectl wait --for=condition=ready pod -l app=sql-server --timeout=300s
+        run: |   
           kubectl wait --for=condition=ready pod -l app=rabbitmq-service -n dev --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=sql-server --timeout=300s
           kubectl wait --for=condition=ready pod -l app=cart-service -n dev --timeout=300s
           kubectl wait --for=condition=ready pod -l app=catalog-service -n dev --timeout=300s
           kubectl wait --for=condition=ready pod -l app=user-service -n dev --timeout=300s
