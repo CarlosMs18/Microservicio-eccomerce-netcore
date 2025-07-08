@@ -7,7 +7,8 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Serilog;
 using Shared.Infrastructure.Extensions;
 
-// 🎯 BOOTSTRAP LOGGER SIMPLIFICADO
+// 🎯 BOOTSTRAP LOGGER SIMPLIFICADO!!!
+//!Para el test!
 SerilogConfigurator.ConfigureBootstrapLogger();
 
 try
