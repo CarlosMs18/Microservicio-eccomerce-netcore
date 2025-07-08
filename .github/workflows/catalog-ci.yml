@@ -1,7 +1,7 @@
 name: Catalog CI
 on:
   push:
-    branches: [ main , ci-cd]
+    branches: [ main ]
     paths: [ 'src/Catalog/**', 'tests/Catalog/**' ]
 jobs:
   test:

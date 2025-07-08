@@ -1,7 +1,7 @@
 name: Cart CI
 on:
   push:
-    branches: [ main , ci-cd]
+    branches: [ main ]
     paths: [ 'src/Cart/**', 'tests/Cart/**' ]
 
 jobs:

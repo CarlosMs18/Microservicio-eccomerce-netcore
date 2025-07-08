@@ -1,7 +1,7 @@
 name: User CI
 on:
   push:
-    branches: [ main , ci-cd]
+    branches: [ main ]
     paths: [ 'src/User/**', 'tests/User/**' ]
 
 jobs:
