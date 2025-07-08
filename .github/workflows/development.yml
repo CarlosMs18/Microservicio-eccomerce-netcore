@@ -114,8 +114,8 @@ jobs:
           
           if [[ "${{ needs.detect-changes.outputs.catalog }}" == "true" ]]; then
             echo "Building Catalog service..."
-            dotnet publish src/Catalog/Catalog.WebAPI/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
-            docker build -t catalog-service:dev -f src/Catalog/Catalog.WebAPI/Dockerfile .
+            dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
+            docker build -t catalog-service:dev -f src/Catalog/Catalog.WebApi/Dockerfile .
             kind load docker-image catalog-service:dev --name netpol-test
           fi
           
