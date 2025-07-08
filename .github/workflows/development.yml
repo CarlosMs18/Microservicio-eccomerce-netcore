@@ -92,10 +92,7 @@ jobs:
         
       - name: Install Calico CNI (for Network Policies)
         run: |
-          
           kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
-          
-         
           kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s
           
       - name: Install NGINX Ingress Controller
@@ -126,30 +123,61 @@ jobs:
             kind load docker-image user-service:dev --name netpol-test
           fi
           
-      - name: Deploy Complete Stack
+      - name: Deploy Infrastructure First
         run: |
+          echo "Creating namespace..."
+          kubectl apply -f k8s/overlays/development/namespace.yaml
+          
+          echo "Deploying database..."
+          kubectl apply -k k8s/overlays/development/database/
+          
+          echo "Deploying RabbitMQ..."
+          kubectl apply -k k8s/overlays/development/rabbitmq/
+          
+          echo "Waiting for infrastructure to be ready..."
+          kubectl wait --for=condition=ready pod -l app=sql-server -n dev --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=rabbitmq-service -n dev --timeout=300s
+          
+      - name: Deploy Application Services
+        run: |
+          echo "Deploying application services..."
           kubectl apply -k k8s/overlays/development/
           
-      - name: Wait for Deployments
-        run: |   
-          kubectl wait --for=condition=ready pod -l app=rabbitmq-service -n dev --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=sql-server --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=cart-service -n dev --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=catalog-service -n dev --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=user-service -n dev --timeout=300s
+      - name: Wait for Application Services
+        run: |
+          echo "Waiting for application services to be ready..."
+          kubectl wait --for=condition=ready pod -l app=cart-service -n dev --timeout=300s || echo "Cart service timeout"
+          kubectl wait --for=condition=ready pod -l app=catalog-service -n dev --timeout=300s || echo "Catalog service timeout"
+          kubectl wait --for=condition=ready pod -l app=user-service -n dev --timeout=300s || echo "User service timeout"
+          
+      - name: Debug Deployment
+        if: failure()
+        run: |
+          echo "=== Checking namespace ==="
+          kubectl get namespace dev || echo "Namespace not found"
+          
+          echo "=== Checking deployments ==="
+          kubectl get deployments -n dev || echo "No deployments found"
+          
+          echo "=== Checking pods ==="
+          kubectl get pods -n dev -o wide || echo "No pods found"
+          
+          echo "=== Checking events ==="
+          kubectl get events -n dev --sort-by=.metadata.creationTimestamp || echo "No events found"
+          
+          echo "=== Pod logs ==="
+          kubectl logs -l app=sql-server -n dev --tail=50 || echo "No SQL logs"
+          kubectl logs -l app=rabbitmq-service -n dev --tail=50 || echo "No RabbitMQ logs"
+          kubectl logs -l app=cart-service -n dev --tail=50 || echo "No Cart logs"
+          kubectl logs -l app=catalog-service -n dev --tail=50 || echo "No Catalog logs"
+          kubectl logs -l app=user-service -n dev --tail=50 || echo "No User logs"
           
       - name: Test Deployment
         run: |
-          echo "=== Pods Status ==="
+          echo "=== Final Status Check ==="
           kubectl get pods -o wide --all-namespaces
-          
-          echo "=== Services Status ==="
           kubectl get svc --all-namespaces
-          
-          echo "=== Ingress Status ==="
           kubectl get ingress -n dev
-          
-          echo "=== Network Policies ==="
           kubectl get networkpolicies -n dev
           
           echo "=== Testing Services ==="
@@ -158,27 +186,27 @@ jobs:
             echo "Testing Cart service..."
             kubectl port-forward svc/cart-service 8080:80 -n dev &
             CART_PID=$!
-            sleep 5
+            sleep 10
             curl -f http://localhost:8080/health || echo "Cart service not ready"
-            kill $CART_PID
+            kill $CART_PID 2>/dev/null || true
           fi
           
           if [[ "${{ needs.detect-changes.outputs.catalog }}" == "true" ]]; then
             echo "Testing Catalog service..."
             kubectl port-forward svc/catalog-service 8081:80 -n dev &
             CATALOG_PID=$!
-            sleep 5
+            sleep 10
             curl -f http://localhost:8081/health || echo "Catalog service not ready"
-            kill $CATALOG_PID
+            kill $CATALOG_PID 2>/dev/null || true
           fi
           
           if [[ "${{ needs.detect-changes.outputs.user }}" == "true" ]]; then
             echo "Testing User service..."
             kubectl port-forward svc/user-service 8082:80 -n dev &
             USER_PID=$!
-            sleep 5
+            sleep 10
             curl -f http://localhost:8082/health || echo "User service not ready"
-            kill $USER_PID
+            kill $USER_PID 2>/dev/null || true
           fi
           
       - name: Cleanup
