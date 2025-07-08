@@ -8,7 +8,7 @@ using Serilog.Events;
 using Serilog.Formatting.Compact;
 using Shared.Infrastructure.Extensions;
 
-// Bootstrap logger!!!!1
+// Bootstrap logger!!!!12
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
