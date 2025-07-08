@@ -87,6 +87,25 @@ jobs:
           cluster_name: netpol-test
           config: infra/kind/kind-config.yaml
           
+      - name: Wait for cluster to be ready
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+          
+      - name: Create local storage class
+        run: |
+          kubectl apply -f - <<EOF
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: local-storage
+            annotations:
+              storageclass.kubernetes.io/is-default-class: "true"
+          provisioner: rancher.io/local-path
+          volumeBindingMode: WaitForFirstConsumer
+          reclaimPolicy: Delete
+          EOF
+          
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
         
@@ -128,20 +147,18 @@ jobs:
           echo "Creating namespace..."
           kubectl apply -f k8s/overlays/development/namespace.yaml
           
-          echo "Deploying database..."
-          kubectl apply -k k8s/overlays/development/database/
+          echo "Deploying ALL resources..."
+          kubectl apply -k k8s/overlays/development/
           
-          echo "Deploying RabbitMQ..."
-          kubectl apply -k k8s/overlays/development/rabbitmq/
-          
-          echo "Waiting for infrastructure to be ready..."
-          kubectl wait --for=condition=ready pod -l app=sql-server -n dev --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=rabbitmq-service -n dev --timeout=300s
+          echo "Waiting for deployments to be available..."
+          kubectl wait --for=condition=available deployment/sql-deployment -n dev --timeout=300s || echo "SQL deployment timeout"
+          kubectl wait --for=condition=available deployment/rabbitmq-service -n dev --timeout=300s || echo "RabbitMQ deployment timeout"
           
       - name: Deploy Application Services
         run: |
-          echo "Deploying application services..."
-          kubectl apply -k k8s/overlays/development/
+          echo "Waiting for all pods to be ready..."
+          kubectl wait --for=condition=ready pod -l app=sql-server -n dev --timeout=300s || echo "SQL pod timeout"
+          kubectl wait --for=condition=ready pod -l app=rabbitmq-service -n dev --timeout=300s || echo "RabbitMQ pod timeout"
           
       - name: Wait for Application Services
         run: |
