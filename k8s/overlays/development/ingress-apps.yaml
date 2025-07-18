@@ -1,4 +1,4 @@
-apiVersion: networking.k8s.io/v1
+﻿apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: ecommerce-public-ingress
@@ -100,5 +100,36 @@ spec:
         backend:
           service:
             name: cart-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: health-checks-ingress
+  namespace: dev
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, OPTIONS"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: localhost
+    http:
+      paths:
+      - path: /health/user
+        pathType: Exact
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 80
+      - path: /metrics/user
+        pathType: Exact
+        backend:
+          service:
+            name: user-service
             port:
               number: 80

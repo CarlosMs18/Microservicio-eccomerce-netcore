@@ -1,6 +1,7 @@
 ﻿using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Microsoft.Extensions.Logging;
+using Serilog;
 using System;
 
 namespace User.Infrastructure.Services.External.Grpc.Interceptors
@@ -11,6 +12,7 @@ namespace User.Infrastructure.Services.External.Grpc.Interceptors
 
         public ExceptionInterceptor(ILogger<ExceptionInterceptor> logger)
         {
+            Log.Information("🔧 ExceptionInterceptor: Iniciando constructor...");
             _logger = logger;
         }
 

@@ -51,9 +51,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "overlays", "overlays", "{72
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "development", "development", "{06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}"
 	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\ingress.yaml = k8s\overlays\development\ingress.yaml
+		k8s\overlays\development\ingress-apps.yaml = k8s\overlays\development\ingress-apps.yaml
+		k8s\overlays\development\ingress-monitoring.yaml = k8s\overlays\development\ingress-monitoring.yaml
 		k8s\overlays\development\kustomization.yaml = k8s\overlays\development\kustomization.yaml
 		k8s\overlays\development\namespace.yaml = k8s\overlays\development\namespace.yaml
+		k8s\overlays\development\servicemonitor-user.yaml = k8s\overlays\development\servicemonitor-user.yaml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "production", "production", "{0072CF27-078C-477F-81BE-CF4AD59B9261}"
@@ -162,10 +164,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{87E2
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{0A256F41-B378-46A5-8CD4-70ADB3619C12}"
 	ProjectSection(SolutionItems) = preProject
-		.github\workflows\cart-ci.yml = .github\workflows\cart-ci.yml
-		.github\workflows\catalog-ci.yml = .github\workflows\catalog-ci.yml
-		.github\workflows\development.yml = .github\workflows\development.yml
-		.github\workflows\user-ci.yml = .github\workflows\user-ci.yml
+		.github\workflows\development-cicd.yml = .github\workflows\development-cicd.yml
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Catalog.IntegrationTests", "tests\Catalog\Catalog.IntegrationTests\Catalog.IntegrationTests.csproj", "{507C3F02-766E-48C1-ADD3-E0B4CF00A1E1}"

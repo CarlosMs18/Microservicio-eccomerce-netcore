@@ -17,6 +17,7 @@ using User.Infrastructure.Services.Internal;
 using User.Infrastructure.Services.External.Grpc.Interceptors;
 using Grpc.AspNetCore.Server;
 using Shared.Core.Interfaces;
+using User.Infrastructure.Services.Infrastructure;
 
 namespace User.Infrastructure
 {
@@ -167,6 +168,8 @@ namespace User.Infrastructure
         public static IServiceCollection AddScopedServices(this IServiceCollection services)
         {
             return services
+                .AddSingleton<IMetricsService, UserMetricsService>()
+                .AddHostedService<MetricsInitializationService>() 
                 .AddScoped<IAuthService, AuthService>()
                 .AddScoped<IHealthChecker, HealthChecker>()
                 .AddScoped<IExternalAuthService, ExternalAuthService>();

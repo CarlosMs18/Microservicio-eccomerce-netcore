@@ -8,5 +8,5 @@ resources:
 - cart/
 - rabbitmq/ 
 - ../../base/network-policies/ 
-- ingress.yaml
+- ingress-apps.yaml 
 namespace: dev    

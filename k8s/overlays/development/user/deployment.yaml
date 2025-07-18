@@ -16,6 +16,7 @@ spec:
       containers:
       - name: user-service
         image: carlosms18/microservicio-usuario:dev
+        imagePullPolicy: Always
         envFrom:
         - configMapRef:
             name: user-config 

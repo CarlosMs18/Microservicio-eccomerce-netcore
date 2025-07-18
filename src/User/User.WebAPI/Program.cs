@@ -1,13 +1,14 @@
-﻿using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
+﻿using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Prometheus;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
-using User.Application.Models;
+using Shared.Infrastructure.Interfaces;
 using User.Infrastructure;
 using User.Infrastructure.Extensions;
 using User.Infrastructure.Persistence;
 using User.Infrastructure.Services.External.Grpc;
+using User.Infrastructure.Services.Internal;
 using User.WebAPI.Middlewares;
 using Users.Application;
 
@@ -20,13 +21,14 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("👤 Iniciando User Service");
+    Log.Information("👤 Iniciando User Service!!!");
+    Console.WriteLine("TOMY!");
 
     var builder = WebApplication.CreateBuilder(args);
 
     // 1. Configuración básica
     var environment = DetectEnvironment();
-    
+
     ConfigureAppSettings(builder, environment);
     ConfigureSerilog(builder, environment);
 
@@ -97,8 +99,8 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
 {
     // Configuración de puertos
     var portsConfig = builder.Configuration.GetSection("Ports");
-    var restPort = portsConfig.GetValue<int>("Rest", 7251);
-    var grpcPort = portsConfig.GetValue<int>("Grpc", 5003);
+    var restPort = portsConfig.GetValue<int>("Rest");
+    var grpcPort = portsConfig.GetValue<int>("Grpc");
 
     // Servicios básicos
     builder.Services.AddControllers();
@@ -108,6 +110,7 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration, environment);
 
+   
     // Health Checks
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<UserIdentityDbContext>(
@@ -166,8 +169,16 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     app.UseHttpsRedirection();
     app.UseRouting();
+
+    // 🔥 ORDEN CORRECTO: UseHttpMetrics() después de UseRouting()
+    app.UseHttpMetrics();
     app.UseAuthorization();
+
+    // 🔥 ORDEN CORRECTO: MapMetrics() después de UseRouting()
+    app.MapMetrics();
     app.MapControllers();
+
+    // Middleware personalizado debe ir después de MapMetrics()
     app.UseMiddleware<ExceptionMiddleware>();
     app.UseSerilogRequestLogging();
 
@@ -195,6 +206,7 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     // gRPC Service
     app.MapGrpcService<AuthGrpcService>();
+
 }
 
 public partial class Program { }

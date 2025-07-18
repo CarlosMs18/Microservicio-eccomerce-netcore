@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Shared.Core.Dtos;
 using Shared.Core.Interfaces;
+using Shared.Infrastructure.Interfaces;
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Security.Claims;
@@ -18,12 +20,13 @@ namespace User.WebAPI.Controllers
     {
         private readonly IMediator _mediator;
         private readonly IExternalAuthService _externalAuthService;
-     
+        private readonly IMetricsService _metricsService;
 
-        public UserController(IMediator mediator, IExternalAuthService externalAuthService)
+        public UserController(IMediator mediator, IExternalAuthService externalAuthService, IMetricsService metricsService)
         {
             _mediator = mediator;
-            _externalAuthService = externalAuthService; 
+            _externalAuthService = externalAuthService;
+            _metricsService = metricsService;
         }
 
         [HttpPost("[action]")]
@@ -32,8 +35,24 @@ namespace User.WebAPI.Controllers
         [ProducesResponseType((int)HttpStatusCode.UnsupportedMediaType)]
         public async Task<ActionResult> RegisterUser([FromBody] RegistrationRequest request)
         {
-            var response = await _mediator.Send(new RegistrationCommand { Request = request });
-            return Ok(response);
+            var stopwatch = Stopwatch.StartNew();
+            var endpoint = "api/user/registeruser";
+            var method = "POST";
+
+            _metricsService.UpdateActiveConnections(1);
+            _metricsService.IncrementRequestCount(endpoint, method);
+
+            try
+            {
+                var response = await _mediator.Send(new RegistrationCommand { Request = request });
+                return Ok(response);
+            }
+            finally
+            {
+                stopwatch.Stop();
+                _metricsService.RecordRequestDuration(endpoint, stopwatch.Elapsed.TotalSeconds);
+                _metricsService.UpdateActiveConnections(-1);
+            }
         }
 
         [HttpPost("login")]
@@ -41,11 +60,25 @@ namespace User.WebAPI.Controllers
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            var response = await _mediator.Send(new LoginCommand { Request = request });
-            return Ok(response);
+            var stopwatch = Stopwatch.StartNew();
+            var endpoint = "api/user/login";
+            var method = "POST";
+
+            _metricsService.UpdateActiveConnections(1);
+            _metricsService.IncrementRequestCount(endpoint, method);
+
+            try
+            {
+                var response = await _mediator.Send(new LoginCommand { Request = request });
+                return Ok(response);
+            }
+            finally
+            {
+                stopwatch.Stop();
+                _metricsService.RecordRequestDuration(endpoint, stopwatch.Elapsed.TotalSeconds);
+                _metricsService.UpdateActiveConnections(-1);
+            }
         }
-
-
 
         [HttpGet("validate-token")]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TokenValidationDecoded))]
@@ -55,6 +88,13 @@ namespace User.WebAPI.Controllers
         [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
         public async Task<IActionResult> ValidateToken()
         {
+            var stopwatch = Stopwatch.StartNew();
+            var endpoint = "api/user/validate-token";
+            var method = "GET";
+
+            _metricsService.UpdateActiveConnections(1);
+            _metricsService.IncrementRequestCount(endpoint, method);
+
             Console.WriteLine("LLAMANDO CONTROLADOR DE USER VALIDATE TOKEN HTTP!!");
 
             var isKubernetesEnvironment = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
@@ -139,6 +179,12 @@ namespace User.WebAPI.Controllers
                     return CreateErrorResponse(500, "Authentication service error", "AUTH_SERVICE_ERROR");
                 else
                     return StatusCode(500, new { error = "Internal authentication error", message = ex.Message });
+            }
+            finally
+            {
+                stopwatch.Stop();
+                _metricsService.RecordRequestDuration(endpoint, stopwatch.Elapsed.TotalSeconds);
+                _metricsService.UpdateActiveConnections(-1);
             }
         }
 
