@@ -25,6 +25,7 @@ spec:
   podSelector:
     matchLabels:
       app: user-service
+      environment: development
   policyTypes:
   - Ingress
   - Egress
@@ -40,9 +41,11 @@ spec:
     - podSelector:
         matchLabels:
           app: cart-service
+          environment: development
     - podSelector:
         matchLabels:
           app: catalog-service
+          environment: development
     ports:
     - protocol: TCP
       port: 80
@@ -61,6 +64,7 @@ spec:
     - podSelector:
         matchLabels:
           app: sql-server
+          environment: development
     ports:
     - protocol: TCP
       port: 1433
@@ -78,6 +82,7 @@ spec:
   podSelector:
     matchLabels:
       app: catalog-service
+      environment: development
   policyTypes:
   - Ingress
   - Egress
@@ -93,6 +98,7 @@ spec:
     - podSelector:
         matchLabels:
           app: cart-service
+          environment: development
     ports:
     - protocol: TCP
       port: 7205  
@@ -111,6 +117,7 @@ spec:
     - podSelector:
         matchLabels:
           app: sql-server
+          environment: development
     ports:
     - protocol: TCP
       port: 1433
@@ -118,6 +125,7 @@ spec:
     - podSelector:
         matchLabels:
           app: rabbitmq-service
+          environment: development
     ports:
     - protocol: TCP
       port: 5672
@@ -135,6 +143,7 @@ spec:
   podSelector:
     matchLabels:
       app: cart-service
+      environment: development
   policyTypes:
   - Ingress
   - Egress
@@ -161,6 +170,7 @@ spec:
     - podSelector:
         matchLabels:
           app: user-service
+          environment: development
     ports:
     - protocol: TCP
       port: 80
@@ -168,6 +178,7 @@ spec:
     - podSelector:
         matchLabels:
           app: catalog-service
+          environment: development
     ports:
     - protocol: TCP
       port: 7205  
@@ -175,6 +186,7 @@ spec:
     - podSelector:
         matchLabels:
           app: rabbitmq-service
+          environment: development
     ports:
     - protocol: TCP
       port: 5672
@@ -182,6 +194,7 @@ spec:
     - podSelector:
         matchLabels:
           app: sql-server
+          environment: development
     ports:
     - protocol: TCP
       port: 1433
@@ -199,6 +212,7 @@ spec:
   podSelector:
     matchLabels:
       app: sql-server
+      environment: development
   policyTypes:
   - Ingress
   ingress:
@@ -206,12 +220,15 @@ spec:
     - podSelector:
         matchLabels:
           app: user-service
+          environment: development
     - podSelector:
         matchLabels:
           app: catalog-service
+          environment: development
     - podSelector:
         matchLabels:
           app: cart-service
+          environment: development
     ports:
     - protocol: TCP
       port: 1433
@@ -225,6 +242,7 @@ spec:
   podSelector:
     matchLabels:
       app: rabbitmq-service
+      environment: development
   policyTypes:
   - Ingress
   ingress:
@@ -232,9 +250,11 @@ spec:
     - podSelector:
         matchLabels:
           app: catalog-service
+          environment: development
     - podSelector:
         matchLabels:
           app: cart-service
+          environment: development
     ports:
     - protocol: TCP
       port: 5672
@@ -242,7 +262,7 @@ spec:
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata:
+metadata:   
   name: default-deny-all-monitoring
   namespace: monitoring
 spec:

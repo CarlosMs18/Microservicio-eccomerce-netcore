@@ -50,55 +50,10 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "overlays", "overlays", "{72D57402-6776-4AA2-89A7-985EE472FBFB}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "development", "development", "{06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\ingress-apps.yaml = k8s\overlays\development\ingress-apps.yaml
-		k8s\overlays\development\ingress-monitoring.yaml = k8s\overlays\development\ingress-monitoring.yaml
-		k8s\overlays\development\kustomization.yaml = k8s\overlays\development\kustomization.yaml
-		k8s\overlays\development\namespace.yaml = k8s\overlays\development\namespace.yaml
-		k8s\overlays\development\servicemonitor-user.yaml = k8s\overlays\development\servicemonitor-user.yaml
-	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "production", "production", "{0072CF27-078C-477F-81BE-CF4AD59B9261}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "catalog", "catalog", "{1DD3BE76-3A06-4725-9077-F97E7E825AD0}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\catalog\deployment.yaml = k8s\overlays\development\catalog\deployment.yaml
-		k8s\overlays\development\catalog\kustomization.yaml = k8s\overlays\development\catalog\kustomization.yaml
-		k8s\overlays\development\catalog\service.yaml = k8s\overlays\development\catalog\service.yaml
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "database", "database", "{9C3D9428-1611-4DEF-8874-62081BE2EFA1}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\database\deployment.yaml = k8s\overlays\development\database\deployment.yaml
-		k8s\overlays\development\database\kustomization.yaml = k8s\overlays\development\database\kustomization.yaml
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "user", "user", "{87ED10D7-C90C-49DE-9DDF-0D8A4B8E74C8}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\user\configmap.yaml = k8s\overlays\development\user\configmap.yaml
-		k8s\overlays\development\user\deployment.yaml = k8s\overlays\development\user\deployment.yaml
-		k8s\overlays\development\user\kustomization.yaml = k8s\overlays\development\user\kustomization.yaml
-		k8s\overlays\development\user\service.yaml = k8s\overlays\development\user\service.yaml
-	EndProjectSection
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "base", "base", "{65E34109-8D8F-4C4C-8F6F-1BF50922642B}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "database", "database", "{747AE917-67BD-4107-8185-15B596D03079}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\base\database\kustomization.yaml = k8s\base\database\kustomization.yaml
-		k8s\base\database\service.yaml = k8s\base\database\service.yaml
-		k8s\base\database\sql-pvc.yaml = k8s\base\database\sql-pvc.yaml
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{AB554CBE-FB18-479F-86CF-38BB94CC7277}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\database\secrets\db-secrets.yaml = k8s\overlays\development\database\secrets\db-secrets.yaml
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{EAC117B8-726C-412C-8964-1C519FC83E9F}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\user\secrets\app-secret.yaml = k8s\overlays\development\user\secrets\app-secret.yaml
-	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shared.Infrastructure", "Shared\Shared.Infrastructure\Shared.Infrastructure.csproj", "{70CF99F4-A4E1-4728-8344-69F3217AECE7}"
 EndProject
@@ -111,35 +66,6 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cart.Domain", "src\Cart\Cart.Domain\Cart.Domain.csproj", "{99F85D29-57AE-4246-82C1-7B5B7A9E6A49}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cart.WebAPI", "src\Cart\Cart.WebAPI\Cart.WebAPI.csproj", "{BA6D90A1-CE1A-4EEB-9EDC-4FD271AB75FD}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "rabbitmq", "rabbitmq", "{DE3E24DF-0381-4871-A627-79E4236C7091}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\rabbitmq\deployment.yaml = k8s\overlays\development\rabbitmq\deployment.yaml
-		k8s\overlays\development\rabbitmq\kustomization.yaml = k8s\overlays\development\rabbitmq\kustomization.yaml
-		k8s\overlays\development\rabbitmq\service.yaml = k8s\overlays\development\rabbitmq\service.yaml
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{EA89299A-828A-4D78-889B-0AEB53D46FE6}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\rabbitmq\secrets\rabbitmq-secrets.yaml = k8s\overlays\development\rabbitmq\secrets\rabbitmq-secrets.yaml
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{D9370585-A44C-42F0-92C6-37B39649FDB5}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\catalog\secrets\app-secret.yaml = k8s\overlays\development\catalog\secrets\app-secret.yaml
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "cart", "cart", "{9648EE02-7A12-454D-8CD4-5A24EEB74A02}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\cart\deployment.yaml = k8s\overlays\development\cart\deployment.yaml
-		k8s\overlays\development\cart\kustomization.yaml = k8s\overlays\development\cart\kustomization.yaml
-		k8s\overlays\development\cart\service.yaml = k8s\overlays\development\cart\service.yaml
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "secrets", "secrets", "{565B074E-6D80-423D-BCE5-0B5306FD5C12}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\cart\secrets\app-secret.yaml = k8s\overlays\development\cart\secrets\app-secret.yaml
-	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "network-policies", "network-policies", "{54CB7A3A-1704-498B-AF10-35A402CA60BC}"
 	ProjectSection(SolutionItems) = preProject
@@ -174,6 +100,91 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Cart", "Cart", "{1724F67F-0084-4C78-8DA2-0DE13B458A48}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cart.IntegrationTests", "tests\Cart\Cart.IntegrationTests\Cart.IntegrationTests.csproj", "{781C3C4E-982A-401C-8F45-2E667A0A9B12}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{3ABCDC9B-E286-4A08-B68D-E2E3519907D0}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "user", "user", "{F4798BC9-DD24-48F9-8495-A13BAD81087C}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\base\apps\user\configmap.yaml = k8s\base\apps\user\configmap.yaml
+		k8s\base\apps\user\deployment.yaml = k8s\base\apps\user\deployment.yaml
+		k8s\base\apps\user\kustomization.yaml = k8s\base\apps\user\kustomization.yaml
+		k8s\base\apps\user\secrets.yaml = k8s\base\apps\user\secrets.yaml
+		k8s\base\apps\user\service.yaml = k8s\base\apps\user\service.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "catalog", "catalog", "{9A11B177-AD5C-47A6-B911-43466EB3CF21}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\base\apps\catalog\deployment.yaml = k8s\base\apps\catalog\deployment.yaml
+		k8s\base\apps\catalog\kustomization.yaml = k8s\base\apps\catalog\kustomization.yaml
+		k8s\base\apps\catalog\secrets.yaml = k8s\base\apps\catalog\secrets.yaml
+		k8s\base\apps\catalog\service.yaml = k8s\base\apps\catalog\service.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "cart", "cart", "{B9839A41-8809-4F99-8A8F-6D7C89B95666}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\base\apps\cart\deployment.yaml = k8s\base\apps\cart\deployment.yaml
+		k8s\base\apps\cart\kustomization.yaml = k8s\base\apps\cart\kustomization.yaml
+		k8s\base\apps\cart\secrets.yaml = k8s\base\apps\cart\secrets.yaml
+		k8s\base\apps\cart\service.yaml = k8s\base\apps\cart\service.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infrastructure", "infrastructure", "{F6594F67-77AF-42B1-BDA9-A92BC328C677}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "database", "database", "{FCF88B30-817B-484F-8302-287D2BF71B0F}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\base\infrastructure\database\deployment.yaml = k8s\base\infrastructure\database\deployment.yaml
+		k8s\base\infrastructure\database\kustomization.yaml = k8s\base\infrastructure\database\kustomization.yaml
+		k8s\base\infrastructure\database\pvc.yaml = k8s\base\infrastructure\database\pvc.yaml
+		k8s\base\infrastructure\database\secrets.yaml = k8s\base\infrastructure\database\secrets.yaml
+		k8s\base\infrastructure\database\service.yaml = k8s\base\infrastructure\database\service.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "messaging", "messaging", "{A3119948-528E-45A0-B7DE-8CBE90CB7F3C}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\base\infrastructure\messaging\deployment.yaml = k8s\base\infrastructure\messaging\deployment.yaml
+		k8s\base\infrastructure\messaging\kustomization.yaml = k8s\base\infrastructure\messaging\kustomization.yaml
+		k8s\base\infrastructure\messaging\secrets.yaml = k8s\base\infrastructure\messaging\secrets.yaml
+		k8s\base\infrastructure\messaging\service.yaml = k8s\base\infrastructure\messaging\service.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "monitoring", "monitoring", "{D914C194-6291-4DEA-9E61-C7A9A71B6000}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\base\infrastructure\monitoring\ingress-monitoring.yaml = k8s\base\infrastructure\monitoring\ingress-monitoring.yaml
+		k8s\base\infrastructure\monitoring\kustomization.yaml = k8s\base\infrastructure\monitoring\kustomization.yaml
+		k8s\base\infrastructure\monitoring\servicemonitor-user.yaml = k8s\base\infrastructure\monitoring\servicemonitor-user.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ingress", "ingress", "{567F865B-20B4-43E6-8EC0-ADD37EED5998}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\base\infrastructure\ingress\ingress-apps.yaml = k8s\base\infrastructure\ingress\ingress-apps.yaml
+		k8s\base\infrastructure\ingress\kustomization.yaml = k8s\base\infrastructure\ingress\kustomization.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "staging", "staging", "{4A2E8487-1833-43B9-9C0C-879BA4987DED}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "patches", "patches", "{F0F3BB09-DD6A-4884-8FF0-D7CD58237267}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\patches\database-dev-patch.yaml = k8s\overlays\development\patches\database-dev-patch.yaml
+		k8s\overlays\development\patches\monitoring-namespace.yaml = k8s\overlays\development\patches\monitoring-namespace.yaml
+		k8s\overlays\development\patches\monitoring-resources.yaml = k8s\overlays\development\patches\monitoring-resources.yaml
+		k8s\overlays\development\patches\rabbitmq-dev-patch.yaml = k8s\overlays\development\patches\rabbitmq-dev-patch.yaml
+		k8s\overlays\development\patches\user-dev-patch.yaml = k8s\overlays\development\patches\user-dev-patch.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{D3EF28FA-C78F-449A-8CFE-90FFC547433A}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\apps\kustomization.yaml = k8s\overlays\development\apps\kustomization.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "monitoring", "monitoring", "{24CFF405-DBAD-4B43-9B30-AB8D61E95E67}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\monitoring\kustomization.yaml = k8s\overlays\development\monitoring\kustomization.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{AF358A06-4B82-494F-969D-376E5CA6B859}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\scripts\deploy-dev.sh = k8s\scripts\deploy-dev.sh
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -279,24 +290,13 @@ Global
 		{72D57402-6776-4AA2-89A7-985EE472FBFB} = {E4C00B5E-3699-44B8-8CA1-97577B858B48}
 		{06E9484A-17C7-43A0-AD6D-8DF18C02F4ED} = {72D57402-6776-4AA2-89A7-985EE472FBFB}
 		{0072CF27-078C-477F-81BE-CF4AD59B9261} = {72D57402-6776-4AA2-89A7-985EE472FBFB}
-		{1DD3BE76-3A06-4725-9077-F97E7E825AD0} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
-		{9C3D9428-1611-4DEF-8874-62081BE2EFA1} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
-		{87ED10D7-C90C-49DE-9DDF-0D8A4B8E74C8} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
 		{65E34109-8D8F-4C4C-8F6F-1BF50922642B} = {E4C00B5E-3699-44B8-8CA1-97577B858B48}
-		{747AE917-67BD-4107-8185-15B596D03079} = {65E34109-8D8F-4C4C-8F6F-1BF50922642B}
-		{AB554CBE-FB18-479F-86CF-38BB94CC7277} = {9C3D9428-1611-4DEF-8874-62081BE2EFA1}
-		{EAC117B8-726C-412C-8964-1C519FC83E9F} = {87ED10D7-C90C-49DE-9DDF-0D8A4B8E74C8}
 		{70CF99F4-A4E1-4728-8344-69F3217AECE7} = {C6F608F7-B79D-4E34-8E80-2948C251A389}
 		{B64804BB-0C4E-4EA4-AFC1-AAC15AEEB52E} = {5B9300D7-CF9A-4251-8CB6-561963BBBC44}
 		{4566F919-FAE0-41EE-995D-6E0600F2279B} = {B64804BB-0C4E-4EA4-AFC1-AAC15AEEB52E}
 		{BD6911A9-899D-4BFD-B333-E8B01FD53884} = {B64804BB-0C4E-4EA4-AFC1-AAC15AEEB52E}
 		{99F85D29-57AE-4246-82C1-7B5B7A9E6A49} = {B64804BB-0C4E-4EA4-AFC1-AAC15AEEB52E}
 		{BA6D90A1-CE1A-4EEB-9EDC-4FD271AB75FD} = {B64804BB-0C4E-4EA4-AFC1-AAC15AEEB52E}
-		{DE3E24DF-0381-4871-A627-79E4236C7091} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
-		{EA89299A-828A-4D78-889B-0AEB53D46FE6} = {DE3E24DF-0381-4871-A627-79E4236C7091}
-		{D9370585-A44C-42F0-92C6-37B39649FDB5} = {1DD3BE76-3A06-4725-9077-F97E7E825AD0}
-		{9648EE02-7A12-454D-8CD4-5A24EEB74A02} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
-		{565B074E-6D80-423D-BCE5-0B5306FD5C12} = {9648EE02-7A12-454D-8CD4-5A24EEB74A02}
 		{54CB7A3A-1704-498B-AF10-35A402CA60BC} = {65E34109-8D8F-4C4C-8F6F-1BF50922642B}
 		{A4C96F73-CEED-4B18-9ADF-190F7F4F562C} = {FE3C050E-F4DB-4EB1-8DF1-09DE96609FA4}
 		{9B9C7947-597C-4FFC-9AB2-E102A0A80A89} = {CDA81294-9511-499A-9B4A-91B8E67F4CF0}
@@ -307,6 +307,20 @@ Global
 		{EB07C340-ED7C-4C4A-9FBE-842B06E656C7} = {1724F67F-0084-4C78-8DA2-0DE13B458A48}
 		{1724F67F-0084-4C78-8DA2-0DE13B458A48} = {4D17FF9A-0108-4439-8ABA-B28810F8644F}
 		{781C3C4E-982A-401C-8F45-2E667A0A9B12} = {1724F67F-0084-4C78-8DA2-0DE13B458A48}
+		{3ABCDC9B-E286-4A08-B68D-E2E3519907D0} = {65E34109-8D8F-4C4C-8F6F-1BF50922642B}
+		{F4798BC9-DD24-48F9-8495-A13BAD81087C} = {3ABCDC9B-E286-4A08-B68D-E2E3519907D0}
+		{9A11B177-AD5C-47A6-B911-43466EB3CF21} = {3ABCDC9B-E286-4A08-B68D-E2E3519907D0}
+		{B9839A41-8809-4F99-8A8F-6D7C89B95666} = {3ABCDC9B-E286-4A08-B68D-E2E3519907D0}
+		{F6594F67-77AF-42B1-BDA9-A92BC328C677} = {65E34109-8D8F-4C4C-8F6F-1BF50922642B}
+		{FCF88B30-817B-484F-8302-287D2BF71B0F} = {F6594F67-77AF-42B1-BDA9-A92BC328C677}
+		{A3119948-528E-45A0-B7DE-8CBE90CB7F3C} = {F6594F67-77AF-42B1-BDA9-A92BC328C677}
+		{D914C194-6291-4DEA-9E61-C7A9A71B6000} = {F6594F67-77AF-42B1-BDA9-A92BC328C677}
+		{567F865B-20B4-43E6-8EC0-ADD37EED5998} = {F6594F67-77AF-42B1-BDA9-A92BC328C677}
+		{4A2E8487-1833-43B9-9C0C-879BA4987DED} = {72D57402-6776-4AA2-89A7-985EE472FBFB}
+		{F0F3BB09-DD6A-4884-8FF0-D7CD58237267} = {D3EF28FA-C78F-449A-8CFE-90FFC547433A}
+		{D3EF28FA-C78F-449A-8CFE-90FFC547433A} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
+		{24CFF405-DBAD-4B43-9B30-AB8D61E95E67} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
+		{AF358A06-4B82-494F-969D-376E5CA6B859} = {E4C00B5E-3699-44B8-8CA1-97577B858B48}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}
