@@ -11,8 +11,7 @@ resources:
   - ../../../base/network-policies
 
 namespace: dev
-commonLabels:
-  environment: development
+
 
 
 
