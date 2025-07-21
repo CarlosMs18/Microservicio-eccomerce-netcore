@@ -22,15 +22,15 @@ jobs:
             cart:
               - 'src/Cart/**'
               - 'tests/Cart/**'
-              - 'k8s/overlays/development/cart/**'
+              - 'k8s/base/apps/cart/**'
             catalog:
               - 'src/Catalog/**'
               - 'tests/Catalog/**'
-              - 'k8s/overlays/development/catalog/**'
+              - 'k8s/base/apps/catalog/**'
             user:
               - 'src/User/**'
               - 'tests/User/**'
-              - 'k8s/overlays/development/user/**'
+              - 'k8s/base/apps/user/**'
 
   ci-tests:
     needs: detect-changes
@@ -141,24 +141,11 @@ jobs:
             docker build -t user-service:dev -f src/User/User.WebAPI/Dockerfile .
             kind load docker-image user-service:dev --name netpol-test
           fi
-          
-      - name: Deploy Infrastructure First
+       
+      - name: Deploy to Development
         run: |
-          echo "Creating namespace..."
-          kubectl apply -f k8s/overlays/development/namespace.yaml
-          
-          echo "Deploying ALL resources..."
-          kubectl apply -k k8s/overlays/development/
-          
-          echo "Waiting for deployments to be available..."
-          kubectl wait --for=condition=available deployment/sql-deployment -n dev --timeout=300s || echo "SQL deployment timeout"
-          kubectl wait --for=condition=available deployment/rabbitmq-service -n dev --timeout=300s || echo "RabbitMQ deployment timeout"
-          
-      - name: Deploy Application Services
-        run: |
-          echo "Waiting for all pods to be ready..."
-          kubectl wait --for=condition=ready pod -l app=sql-server -n dev --timeout=300s || echo "SQL pod timeout"
-          kubectl wait --for=condition=ready pod -l app=rabbitmq-service -n dev --timeout=300s || echo "RabbitMQ pod timeout"
+          chmod +x k8s/scripts/deploy-dev.sh
+          bash k8s/scripts/deploy-dev.sh
           
       - name: Wait for Application Services
         run: |

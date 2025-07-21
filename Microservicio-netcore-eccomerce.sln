@@ -163,13 +163,6 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "staging", "staging", "{4A2E8487-1833-43B9-9C0C-879BA4987DED}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "patches", "patches", "{F0F3BB09-DD6A-4884-8FF0-D7CD58237267}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\patches\database-dev-patch.yaml = k8s\overlays\development\patches\database-dev-patch.yaml
-		k8s\overlays\development\patches\monitoring-namespace.yaml = k8s\overlays\development\patches\monitoring-namespace.yaml
-		k8s\overlays\development\patches\monitoring-resources.yaml = k8s\overlays\development\patches\monitoring-resources.yaml
-		k8s\overlays\development\patches\rabbitmq-dev-patch.yaml = k8s\overlays\development\patches\rabbitmq-dev-patch.yaml
-		k8s\overlays\development\patches\user-dev-patch.yaml = k8s\overlays\development\patches\user-dev-patch.yaml
-	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{D3EF28FA-C78F-449A-8CFE-90FFC547433A}"
 	ProjectSection(SolutionItems) = preProject
