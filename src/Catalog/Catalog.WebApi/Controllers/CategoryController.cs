@@ -5,6 +5,8 @@ using Catalog.Application.Features.Categories.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Shared.Infrastructure.Interfaces;
+using System.Diagnostics;
 using System.Net;
 
 namespace Catalog.WebAPI.Controllers
@@ -14,10 +16,12 @@ namespace Catalog.WebAPI.Controllers
     public class CategoryController : ControllerBase
     {
         private readonly IMediator _mediator;
+        private readonly IMetricsService _metricsService;
 
-        public CategoryController(IMediator mediator)
+        public CategoryController(IMediator mediator, IMetricsService metricsService)
         {
             _mediator = mediator;
+            _metricsService = metricsService;
         }
 
         [HttpPost]
@@ -28,13 +32,29 @@ namespace Catalog.WebAPI.Controllers
         [ProducesResponseType(typeof(ProblemDetails), (int)HttpStatusCode.InternalServerError)]
         public async Task<ActionResult<CategoryResponse>> CreateCategory([FromBody] CreateCategoryCommand command)
         {
-            // 🎯 ¡Súper limpio! El middleware maneja las excepciones
-            var result = await _mediator.Send(command);
-            return CreatedAtAction(
-                nameof(GetCategory),
-                new { id = result.Id },
-                result
-            );
+            var stopwatch = Stopwatch.StartNew();
+            var endpoint = "api/category";
+            var method = "POST";
+
+            _metricsService.UpdateActiveConnections(1);
+            _metricsService.IncrementRequestCount(endpoint, method);
+
+            try
+            {
+                // 🎯 ¡Súper limpio! El middleware maneja las excepciones
+                var result = await _mediator.Send(command);
+                return CreatedAtAction(
+                    nameof(GetCategory),
+                    new { id = result.Id },
+                    result
+                );
+            }
+            finally
+            {
+                stopwatch.Stop();
+                _metricsService.RecordRequestDuration(endpoint, stopwatch.Elapsed.TotalSeconds);
+                _metricsService.UpdateActiveConnections(-1);
+            }
         }
 
         [HttpGet("{id:guid}")]
@@ -44,11 +64,17 @@ namespace Catalog.WebAPI.Controllers
         [ProducesResponseType((int)HttpStatusCode.Unauthorized)]
         public async Task<ActionResult<CategoryResponse>> GetCategory(Guid id)
         {
+            var stopwatch = Stopwatch.StartNew();
+            var endpoint = "api/category/{id}";
+            var method = "GET";
+
+            _metricsService.UpdateActiveConnections(1);
+            _metricsService.IncrementRequestCount(endpoint, method);
+
             try
             {
                 var query = new GetCategoryQuery { Id = id };
                 var result = await _mediator.Send(query);
-
                 return Ok(result);
             }
             catch (NotFoundException ex)
@@ -71,16 +97,37 @@ namespace Catalog.WebAPI.Controllers
                     Instance = HttpContext.Request.Path
                 });
             }
+            finally
+            {
+                stopwatch.Stop();
+                _metricsService.RecordRequestDuration(endpoint, stopwatch.Elapsed.TotalSeconds);
+                _metricsService.UpdateActiveConnections(-1);
+            }
         }
 
         [HttpGet]
+        [ProducesResponseType(typeof(IEnumerable<CategoryListResponse>), (int)HttpStatusCode.OK)]
         public async Task<ActionResult<IEnumerable<CategoryListResponse>>> GetAll()
         {
-            var query = new GetAllCategoriesQuery();
-            var result = await _mediator.Send(query);
-            return Ok(result);
+            var stopwatch = Stopwatch.StartNew();
+            var endpoint = "api/category";
+            var method = "GET";
+
+            _metricsService.UpdateActiveConnections(1);
+            _metricsService.IncrementRequestCount(endpoint, method);
+
+            try
+            {
+                var query = new GetAllCategoriesQuery();
+                var result = await _mediator.Send(query);
+                return Ok(result);
+            }
+            finally
+            {
+                stopwatch.Stop();
+                _metricsService.RecordRequestDuration(endpoint, stopwatch.Elapsed.TotalSeconds);
+                _metricsService.UpdateActiveConnections(-1);
+            }
         }
-
-
     }
 }

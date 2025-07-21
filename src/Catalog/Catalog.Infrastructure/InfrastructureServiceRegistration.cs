@@ -1,10 +1,12 @@
 ﻿using Catalog.Application.Contracts.Persistence;
 using Catalog.Infrastructure.Configuration;
 using Catalog.Infrastructure.Extensions;
+using Catalog.Infrastructure.Infrastructure;
 using Catalog.Infrastructure.Persistence;
 using Catalog.Infrastructure.Repositories;
 using Catalog.Infrastructure.Services.External.Grpc;
 using Catalog.Infrastructure.Services.External.Grpc.Interceptors;
+using Catalog.Infrastructure.Services.Internal;
 using Catalog.Infrastructure.SyncDataServices.Grpc;
 using Grpc.AspNetCore.Server;
 using Grpc.Core;
@@ -13,6 +15,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Polly;
+using Shared.Core.Interfaces;
 using Shared.Infrastructure.Extensions;
 using Shared.Infrastructure.Interfaces;
 using User.Auth;
@@ -38,6 +41,9 @@ namespace Catalog.Infrastructure
 
             // 4. Registro de repositorios
             RegisterRepositories(services);
+
+
+            services.AddCatalogScopedServices();
 
             // 5. Servicios externos
             ConfigureExternalServices(services, configuration, environment);
@@ -110,6 +116,18 @@ namespace Catalog.Infrastructure
 
             // HTTP Clients (si los tienes)
             services.AddExternalHttpClients(configuration);
+        }
+    }
+    public static class InfrastructureExtensions
+    {
+        public static IServiceCollection AddCatalogScopedServices(this IServiceCollection services)
+        {
+            return services
+                // Servicios para Grafana/Prometheus
+                .AddSingleton<IMetricsService, CatalogMetricsService>()
+                .AddHostedService<MetricsInitializationService>();
+
+             
         }
     }
 

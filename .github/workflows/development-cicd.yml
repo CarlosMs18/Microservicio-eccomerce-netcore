@@ -2,7 +2,7 @@ name: Development CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, metrics-catalog ]
   pull_request:
     branches: [ main ]
 

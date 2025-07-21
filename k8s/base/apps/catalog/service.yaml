@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: catalog-service
   namespace: dev
+  labels:              
+    app: catalog-service 
 spec:
   selector:
     app: catalog-service

@@ -16,6 +16,7 @@ spec:
       containers:
       - name: catalog-service
         image: carlosms18/microservicio-catalog:dev
+        imagePullPolicy: Always
         env:
         - name: DB_PASSWORD 
           valueFrom:
