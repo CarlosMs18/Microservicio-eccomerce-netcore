@@ -3,6 +3,7 @@ using Cart.Infrastructure;
 using Cart.Infrastructure.Extensions;
 using Cart.WebAPI.Middlewares;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Prometheus;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
@@ -179,6 +180,7 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     app.UseHttpsRedirection();
     app.UseRouting();
+    app.UseHttpMetrics();
 
     if (environment == "Testing" || environment == "CI")
     {
@@ -198,6 +200,7 @@ static void ConfigureMiddleware(WebApplication app, string environment)
     }
 
     app.UseAuthorization();
+    app.MapMetrics();
     app.MapControllers();
     app.UseMiddleware<ExceptionMiddleware>();
     app.UseSerilogRequestLogging();

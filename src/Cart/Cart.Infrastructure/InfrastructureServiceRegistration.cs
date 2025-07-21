@@ -2,8 +2,10 @@
 using Cart.Infrastructure.BackgroundServices;
 using Cart.Infrastructure.Configuration;
 using Cart.Infrastructure.Extensions;
+using Cart.Infrastructure.Infrastructure;
 using Cart.Infrastructure.Persistence;
 using Cart.Infrastructure.Repositories;
+using Cart.Infrastructure.Services.Internal;
 using Cart.Infrastructure.Services.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -33,6 +35,8 @@ namespace Cart.Infrastructure
 
             // 4. Registro de repositorios
             RegisterRepositories(services);
+
+            services.AddCartScopedServices();
 
             // 5. Servicios externos
             ConfigureExternalServices(services, configuration, environment);
@@ -127,6 +131,18 @@ namespace Cart.Infrastructure
             // services.AddHttpClient<ICatalogService, CatalogService>();
 
             return services;
+        }
+
+    }
+
+    public static class InfrastructureExtensions
+    {
+        public static IServiceCollection AddCartScopedServices(this IServiceCollection services)
+        {
+            return services
+                // Servicios para Grafana/Prometheus
+                .AddSingleton<IMetricsService, CartMetricsService>()
+                .AddHostedService<MetricsInitializationService>();
         }
     }
 }

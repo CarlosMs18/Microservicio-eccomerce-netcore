@@ -140,3 +140,17 @@ spec:
             name: catalog-service
             port:
               number: 80
+      - path: /health/cart
+        pathType: Exact
+        backend:
+          service:
+            name: cart-service
+            port:
+              number: 80
+      - path: /metrics/cart
+        pathType: Exact
+        backend:
+          service:
+            name: cart-service
+            port:
+              number: 80

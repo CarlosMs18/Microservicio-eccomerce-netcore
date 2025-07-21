@@ -5,3 +5,4 @@ resources:
 - monitoring-namespace.yaml
 - servicemonitor-user.yaml
 - servicemonitor-catalog.yaml
+- servicemonitor-cart.yaml
