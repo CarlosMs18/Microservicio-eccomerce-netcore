@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: catalog-service-monitor
+  namespace: monitoring
+  labels:
+    app: catalog-service
+    release: prometheus-stack  
+spec:
+  selector:
+    matchLabels:
+      app: catalog-service
+  namespaceSelector:
+    matchNames:
+    - dev  
+  endpoints:
+  - port: rest           
+    path: /metrics       
+    interval: 30s
+    scrapeTimeout: 10s

@@ -4,6 +4,7 @@ using Catalog.Infrastructure.Extensions;
 using Catalog.Infrastructure.Logging; // 🆕 NUEVA REFERENCIA
 using Catalog.WebAPI.Middlewares;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Prometheus;
 using Serilog;
 using Shared.Infrastructure.Extensions;
 
@@ -13,7 +14,7 @@ SerilogConfigurator.ConfigureBootstrapLogger();
 
 try
 {
-    Log.Information("🚀 Iniciando Catalog Service");
+    Log.Information("🚀 Iniciando Catalog Service!!");
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -166,6 +167,7 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     app.UseHttpsRedirection();
     app.UseRouting();
+    app.UseHttpMetrics();
 
     if (environment == "Testing" || environment == "CI")
     {
@@ -183,7 +185,9 @@ static void ConfigureMiddleware(WebApplication app, string environment)
         Log.Information("🔐 TokenGrpcValidationMiddleware habilitado para entorno: {Environment}", environment);
     }
 
+
     app.UseAuthorization();
+    app.MapMetrics();
     app.MapControllers();
     app.MapGrpcService<Catalog.Infrastructure.Services.External.Grpc.CatalogGrpcService>();
     app.UseMiddleware<ExceptionMiddleware>();

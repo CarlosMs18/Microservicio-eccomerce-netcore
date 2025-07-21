@@ -151,6 +151,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "monitoring", "monitoring", 
 	ProjectSection(SolutionItems) = preProject
 		k8s\base\infrastructure\monitoring\ingress-monitoring.yaml = k8s\base\infrastructure\monitoring\ingress-monitoring.yaml
 		k8s\base\infrastructure\monitoring\kustomization.yaml = k8s\base\infrastructure\monitoring\kustomization.yaml
+		k8s\base\infrastructure\monitoring\monitoring-namespace.yaml = k8s\base\infrastructure\monitoring\monitoring-namespace.yaml
+		k8s\base\infrastructure\monitoring\servicemonitor-catalog.yaml = k8s\base\infrastructure\monitoring\servicemonitor-catalog.yaml
 		k8s\base\infrastructure\monitoring\servicemonitor-user.yaml = k8s\base\infrastructure\monitoring\servicemonitor-user.yaml
 	EndProjectSection
 EndProject
@@ -177,6 +179,12 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{AF358A06-4B82-494F-969D-376E5CA6B859}"
 	ProjectSection(SolutionItems) = preProject
 		k8s\scripts\deploy-dev.sh = k8s\scripts\deploy-dev.sh
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "namespaces", "namespaces", "{39620063-92EA-4752-91E4-768D56847B62}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\base\infrastructure\namespaces\dev-namespace.yaml = k8s\base\infrastructure\namespaces\dev-namespace.yaml
+		k8s\base\infrastructure\namespaces\kustomization.yaml = k8s\base\infrastructure\namespaces\kustomization.yaml
 	EndProjectSection
 EndProject
 Global
@@ -314,6 +322,7 @@ Global
 		{D3EF28FA-C78F-449A-8CFE-90FFC547433A} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
 		{24CFF405-DBAD-4B43-9B30-AB8D61E95E67} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
 		{AF358A06-4B82-494F-969D-376E5CA6B859} = {E4C00B5E-3699-44B8-8CA1-97577B858B48}
+		{39620063-92EA-4752-91E4-768D56847B62} = {F6594F67-77AF-42B1-BDA9-A92BC328C677}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}

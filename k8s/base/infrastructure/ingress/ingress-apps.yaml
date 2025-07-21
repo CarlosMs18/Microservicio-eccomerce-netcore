@@ -133,3 +133,10 @@ spec:
             name: user-service
             port:
               number: 80
+      - path: /metrics/catalog
+        pathType: Exact
+        backend:
+          service:
+            name: catalog-service
+            port:
+              number: 80
