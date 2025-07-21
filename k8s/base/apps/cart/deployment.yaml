@@ -16,6 +16,7 @@ spec:
       containers:
       - name: cart-service
         image: carlosms18/microservicio-cart:dev
+        imagePullPolicy: Always
         env:
         - name: DB_PASSWORD 
           valueFrom:
