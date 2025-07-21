@@ -29,6 +29,7 @@ namespace User.Infrastructure.Extensions
                     var context = scopedServices.GetRequiredService<UserIdentityDbContext>();
 
                     Log.Information("🔄 Creando/migrando base de datos...");
+                    Console.WriteLine("Lero");
                     await context.Database.MigrateAsync();
 
                     Log.Information("📊 Inicializando datos...");

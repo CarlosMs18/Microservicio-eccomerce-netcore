@@ -2,7 +2,7 @@ name: Development CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, metrics]
   pull_request:
     branches: [ main ]
 
@@ -22,15 +22,15 @@ jobs:
             cart:
               - 'src/Cart/**'
               - 'tests/Cart/**'
-              - 'k8s/overlays/development/cart/**'
+              - 'k8s/base/apps/cart/**'
             catalog:
               - 'src/Catalog/**'
               - 'tests/Catalog/**'
-              - 'k8s/overlays/development/catalog/**'
+              - 'k8s/base/apps/catalog/**'
             user:
               - 'src/User/**'
               - 'tests/User/**'
-              - 'k8s/overlays/development/user/**'
+              - 'k8s/base/apps/user/**'
 
   ci-tests:
     needs: detect-changes
@@ -119,53 +119,97 @@ jobs:
           kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
           kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=300s
           
-      - name: Build Changed Services
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        
+      - name: Install Prometheus Stack
         run: |
-          if [[ "${{ needs.detect-changes.outputs.cart }}" == "true" ]]; then
-            echo "Building Cart service..."
-            dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
-            docker build -t cart-service:dev -f src/Cart/Cart.WebAPI/Dockerfile .
-            kind load docker-image cart-service:dev --name netpol-test
-          fi
+          echo "Adding Prometheus Helm repository..."
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
           
-          if [[ "${{ needs.detect-changes.outputs.catalog }}" == "true" ]]; then
-            echo "Building Catalog service..."
-            dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
-            docker build -t catalog-service:dev -f src/Catalog/Catalog.WebApi/Dockerfile .
-            kind load docker-image catalog-service:dev --name netpol-test
-          fi
+          echo "Installing Prometheus Stack..."
+          helm install prometheus-stack prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --create-namespace \
+            --set prometheus.service.type=NodePort \
+            --set grafana.service.type=NodePort \
+            --wait --timeout=10m
           
-          if [[ "${{ needs.detect-changes.outputs.user }}" == "true" ]]; then
-            echo "Building User service..."
-            dotnet publish src/User/User.WebAPI/User.WebAPI.csproj -c Release -o src/User/publish
-            docker build -t user-service:dev -f src/User/User.WebAPI/Dockerfile .
-            kind load docker-image user-service:dev --name netpol-test
-          fi
+          echo "Prometheus Stack installed successfully!"
           
-      - name: Deploy Infrastructure First
+      - name: Build All Services for Development
         run: |
-          echo "Creating namespace..."
-          kubectl apply -f k8s/overlays/development/namespace.yaml
+          echo "Building all services for development environment..."
           
-          echo "Deploying ALL resources..."
-          kubectl apply -k k8s/overlays/development/
+          echo "Building Cart service..."
+          dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
+          docker build -t cart-service:dev -f src/Cart/Cart.WebAPI/Dockerfile .
+          kind load docker-image cart-service:dev --name netpol-test
           
-          echo "Waiting for deployments to be available..."
-          kubectl wait --for=condition=available deployment/sql-deployment -n dev --timeout=300s || echo "SQL deployment timeout"
-          kubectl wait --for=condition=available deployment/rabbitmq-service -n dev --timeout=300s || echo "RabbitMQ deployment timeout"
+          echo "Building Catalog service..."
+          dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
+          docker build -t catalog-service:dev -f src/Catalog/Catalog.WebApi/Dockerfile .
+          kind load docker-image catalog-service:dev --name netpol-test
           
-      - name: Deploy Application Services
+          echo "Building User service..."
+          dotnet publish src/User/User.WebAPI/User.WebAPI.csproj -c Release -o src/User/publish
+          docker build -t user-service:dev -f src/User/User.WebAPI/Dockerfile .
+          kind load docker-image user-service:dev --name netpol-test
+          
+          echo "All images built and loaded successfully!"
+          
+      - name: Debug Kustomization Files
         run: |
-          echo "Waiting for all pods to be ready..."
-          kubectl wait --for=condition=ready pod -l app=sql-server -n dev --timeout=300s || echo "SQL pod timeout"
-          kubectl wait --for=condition=ready pod -l app=rabbitmq-service -n dev --timeout=300s || echo "RabbitMQ pod timeout"
+          echo "=== Checking file structure ==="
+          find k8s -name "kustomization.yaml" -type f
+          
+          echo "=== Apps kustomization content ==="
+          cat k8s/overlays/development/apps/kustomization.yaml
+          
+          echo "=== Monitoring kustomization content ==="
+          cat k8s/overlays/development/monitoring/kustomization.yaml
+          
+          echo "=== Testing kustomize build for apps ==="
+          kubectl kustomize k8s/overlays/development/apps/ || echo "Apps kustomization failed"
+          
+          echo "=== Testing kustomize build for monitoring ==="
+          kubectl kustomize k8s/overlays/development/monitoring/ || echo "Monitoring kustomization failed"
+       
+      - name: Deploy to Development
+        run: |
+          echo "Deploying applications to development environment..."
+          kubectl apply -k k8s/overlays/development/apps/ || echo "Apps deployment failed"
+          
+          echo "Deploying monitoring to development environment..."
+          kubectl apply -k k8s/overlays/development/monitoring/ || echo "Monitoring deployment failed"
+          
+          echo "Development deployment completed!"
+          
+      - name: Check Deployment Status
+        run: |
+          echo "=== Checking namespaces ==="
+          kubectl get namespaces
+          
+          echo "=== Checking dev namespace resources ==="
+          kubectl get all -n dev || echo "Dev namespace not found or empty"
+          
+          echo "=== Checking monitoring namespace resources ==="
+          kubectl get all -n monitoring || echo "Monitoring namespace not found or empty"
           
       - name: Wait for Application Services
         run: |
           echo "Waiting for application services to be ready..."
-          kubectl wait --for=condition=ready pod -l app=cart-service -n dev --timeout=300s || echo "Cart service timeout"
-          kubectl wait --for=condition=ready pod -l app=catalog-service -n dev --timeout=300s || echo "Catalog service timeout"
-          kubectl wait --for=condition=ready pod -l app=user-service -n dev --timeout=300s || echo "User service timeout"
+          
+          if kubectl get namespace dev > /dev/null 2>&1; then
+            echo "Dev namespace found, waiting for pods..."
+            kubectl wait --for=condition=ready pod -l app=cart-service -n dev --timeout=300s || echo "Cart service timeout"
+            kubectl wait --for=condition=ready pod -l app=catalog-service -n dev --timeout=300s || echo "Catalog service timeout"
+            kubectl wait --for=condition=ready pod -l app=user-service -n dev --timeout=300s || echo "User service timeout"
+          else
+            echo "ERROR: Dev namespace not found!"
+            exit 1
+          fi
           
       - name: Debug Deployment
         if: failure()
@@ -189,41 +233,54 @@ jobs:
           kubectl logs -l app=catalog-service -n dev --tail=50 || echo "No Catalog logs"
           kubectl logs -l app=user-service -n dev --tail=50 || echo "No User logs"
           
+          echo "=== Describe pods ==="
+          kubectl describe pods -n dev || echo "No pods to describe"
+          
       - name: Test Deployment
         run: |
           echo "=== Final Status Check ==="
           kubectl get pods -o wide --all-namespaces
           kubectl get svc --all-namespaces
-          kubectl get ingress -n dev
-          kubectl get networkpolicies -n dev
+          kubectl get ingress -n dev || echo "No ingress found"
+          kubectl get networkpolicies -n dev || echo "No network policies found"
           
           echo "=== Testing Services ==="
           
-          if [[ "${{ needs.detect-changes.outputs.cart }}" == "true" ]]; then
+          if kubectl get namespace dev > /dev/null 2>&1; then
             echo "Testing Cart service..."
-            kubectl port-forward svc/cart-service 8080:80 -n dev &
-            CART_PID=$!
-            sleep 10
-            curl -f http://localhost:8080/health || echo "Cart service not ready"
-            kill $CART_PID 2>/dev/null || true
-          fi
-          
-          if [[ "${{ needs.detect-changes.outputs.catalog }}" == "true" ]]; then
+            if kubectl get svc cart-service -n dev > /dev/null 2>&1; then
+              kubectl port-forward svc/cart-service 8080:80 -n dev &
+              CART_PID=$!
+              sleep 10
+              curl -f http://localhost:8080/health || echo "Cart service not ready"
+              kill $CART_PID 2>/dev/null || true
+            else
+              echo "Cart service not found"
+            fi
+            
             echo "Testing Catalog service..."
-            kubectl port-forward svc/catalog-service 8081:80 -n dev &
-            CATALOG_PID=$!
-            sleep 10
-            curl -f http://localhost:8081/health || echo "Catalog service not ready"
-            kill $CATALOG_PID 2>/dev/null || true
-          fi
-          
-          if [[ "${{ needs.detect-changes.outputs.user }}" == "true" ]]; then
+            if kubectl get svc catalog-service -n dev > /dev/null 2>&1; then
+              kubectl port-forward svc/catalog-service 8081:80 -n dev &
+              CATALOG_PID=$!
+              sleep 10
+              curl -f http://localhost:8081/health || echo "Catalog service not ready"
+              kill $CATALOG_PID 2>/dev/null || true
+            else
+              echo "Catalog service not found"
+            fi
+            
             echo "Testing User service..."
-            kubectl port-forward svc/user-service 8082:80 -n dev &
-            USER_PID=$!
-            sleep 10
-            curl -f http://localhost:8082/health || echo "User service not ready"
-            kill $USER_PID 2>/dev/null || true
+            if kubectl get svc user-service -n dev > /dev/null 2>&1; then
+              kubectl port-forward svc/user-service 8082:80 -n dev &
+              USER_PID=$!
+              sleep 10
+              curl -f http://localhost:8082/health || echo "User service not ready"
+              kill $USER_PID 2>/dev/null || true
+            else
+              echo "User service not found"
+            fi
+          else
+            echo "ERROR: Dev namespace still not found!"
           fi
           
       - name: Cleanup

@@ -16,6 +16,7 @@ namespace User.Infrastructure.Services.External.Grpc
             ILogger<AuthGrpcService> logger,
             IHealthChecker healthChecker)
         {
+            Console.WriteLine("🔧 AuthGrpcService: Iniciando constructor...");
             _authService = authService;
             _logger = logger;
             _healthChecker = healthChecker;

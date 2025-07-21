@@ -65,6 +65,22 @@ namespace User.Infrastructure.Persistence
                 await userManager.AddToRoleAsync(admin, "Admin");
                 await userManager.AddToRoleAsync(admin, "Manager"); // Rol adicional
             }
+            if (await userManager.FindByEmailAsync("c@gmail.com") == null)
+            {
+                var admin = new ApplicationUser
+                {
+                    UserName = "c@gmail.com",
+                    Email = "c@gmail.com",
+                    FirstName = "Super!",
+                    LastName = "Admin!",
+                    EmailConfirmed = true,
+
+                };
+
+                await userManager.CreateAsync(admin, "Ab$12345");
+                await userManager.AddToRoleAsync(admin, "Admin");
+                await userManager.AddToRoleAsync(admin, "Manager"); // Rol adicional
+            }
 
             // 3. Crear usuario cliente de prueba
             if (await userManager.FindByEmailAsync("customer@example.com") == null)

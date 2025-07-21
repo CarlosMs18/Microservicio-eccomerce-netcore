@@ -13,6 +13,7 @@ namespace User.Infrastructure.Services.Internal
             UserIdentityDbContext dbContext,
             IExternalAuthService authService)
         {
+            Console.WriteLine("🔧 Health check: Iniciando constructor...");
             _dbContext = dbContext;
             _authService = authService;
         }
