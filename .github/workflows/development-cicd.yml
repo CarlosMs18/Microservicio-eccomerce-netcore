@@ -119,6 +119,25 @@ jobs:
           kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
           kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=300s
           
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        
+      - name: Install Prometheus Stack
+        run: |
+          echo "Adding Prometheus Helm repository..."
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+          
+          echo "Installing Prometheus Stack..."
+          helm install prometheus-stack prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --create-namespace \
+            --set prometheus.service.type=NodePort \
+            --set grafana.service.type=NodePort \
+            --wait --timeout=10m
+          
+          echo "Prometheus Stack installed successfully!"
+          
       - name: Build All Services for Development
         run: |
           echo "Building all services for development environment..."
