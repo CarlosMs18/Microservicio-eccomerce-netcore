@@ -152,6 +152,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "monitoring", "monitoring", 
 		k8s\base\infrastructure\monitoring\ingress-monitoring.yaml = k8s\base\infrastructure\monitoring\ingress-monitoring.yaml
 		k8s\base\infrastructure\monitoring\kustomization.yaml = k8s\base\infrastructure\monitoring\kustomization.yaml
 		k8s\base\infrastructure\monitoring\monitoring-namespace.yaml = k8s\base\infrastructure\monitoring\monitoring-namespace.yaml
+		k8s\base\infrastructure\monitoring\servicemonitor-cart.yaml = k8s\base\infrastructure\monitoring\servicemonitor-cart.yaml
 		k8s\base\infrastructure\monitoring\servicemonitor-catalog.yaml = k8s\base\infrastructure\monitoring\servicemonitor-catalog.yaml
 		k8s\base\infrastructure\monitoring\servicemonitor-user.yaml = k8s\base\infrastructure\monitoring\servicemonitor-user.yaml
 	EndProjectSection
