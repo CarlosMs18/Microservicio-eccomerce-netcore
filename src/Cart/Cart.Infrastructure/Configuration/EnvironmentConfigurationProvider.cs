@@ -13,6 +13,7 @@ namespace Cart.Infrastructure.Configuration
                 "Docker" => GetDockerConfig(config),
                 "CI" => GetCIConfig(config),
                 "Kubernetes" => GetKubernetesConfig(config),
+                "Production" => GetProductionConfig(config),
                 _ => throw new InvalidOperationException($"Entorno {environment} no soportado")
             };
         }
@@ -239,6 +240,57 @@ namespace Cart.Infrastructure.Configuration
                     MinimumLevel = "Information",
                     EnableFileLogging = true,
                     RetainedFileCountLimit = 7 // Menos archivos en K8s por espacio
+                }
+            };
+        }
+
+        private static CartConfiguration GetProductionConfig(IConfiguration config)
+        {
+            Console.WriteLine("GetProductionConfig");
+            var connectionParams = config.GetSection("ConnectionParameters");
+            var poolingParams = config.GetSection("ConnectionPooling");
+            var templates = config.GetSection("ConnectionTemplates");
+
+            var template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
+
+            var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+            if (string.IsNullOrEmpty(dbPassword))
+            {
+                throw new InvalidOperationException("Variable de entorno DB_PASSWORD no encontrada para Production");
+            }
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["server"] = connectionParams["server"] ?? throw new InvalidOperationException("Server no configurado para Production"),
+                ["database"] = config["Cart:DatabaseName"] ?? "CartDB_Prod", // ← BD de producción
+                ["user"] = connectionParams["user"] ?? "sa",
+                ["password"] = dbPassword,
+                ["trust"] = connectionParams["trust"] ?? "true",
+                ["pooling"] = poolingParams["pooling"] ?? "true",
+                ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100", // Más conexiones en prod
+                ["minPoolSize"] = poolingParams["minPoolSize"] ?? "5",
+                ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30",
+                ["commandTimeout"] = poolingParams["commandTimeout"] ?? "45" // Más tiempo para comandos complejos
+            };
+
+            var connectionString = BuildConnectionString(template, parameters);
+
+            return new CartConfiguration
+            {
+                Environment = "Production",
+                ConnectionString = connectionString,
+                Database = new DatabaseConfiguration
+                {
+                    MaxRetryCount = 10, // Más reintentos en prod
+                    MaxRetryDelaySeconds = 60, // Delays más largos
+                    EnableDetailedErrors = false, // ← Seguridad en prod
+                    EnableSensitiveDataLogging = false // ← Nunca en prod
+                },
+                Logging = new LoggingConfiguration
+                {
+                    MinimumLevel = "Warning", // ← Solo warnings/errors
+                    EnableFileLogging = true,
+                    RetainedFileCountLimit = 30 // ← Más logs en prod
                 }
             };
         }

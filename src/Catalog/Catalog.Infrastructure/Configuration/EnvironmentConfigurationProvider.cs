@@ -13,6 +13,7 @@ namespace Catalog.Infrastructure.Configuration
                 "Docker" => GetDockerConfig(config),
                 "CI" => GetCIConfig(config),
                 "Kubernetes" => GetKubernetesConfig(config),
+                "Production" => GetProductionConfig(config),
                 _ => throw new InvalidOperationException($"Entorno {environment} no soportado")
             };
         }
@@ -167,6 +168,7 @@ namespace Catalog.Infrastructure.Configuration
                 }
             };
         }
+
         private static CatalogConfiguration GetDockerConfig(IConfiguration config)
         {
             var connectionParams = config.GetSection("ConnectionParameters");
@@ -269,6 +271,63 @@ namespace Catalog.Infrastructure.Configuration
                     EnableDetailedErrors = false,
                     MaxMessageSizeMB = 2, // Más conservador en K8s
                     CompressionLevel = "Fastest"
+                }
+            };
+        }
+
+        private static CatalogConfiguration GetProductionConfig(IConfiguration config)
+        {
+            Console.WriteLine("GetProductionConfig");
+            var connectionParams = config.GetSection("ConnectionParameters");
+            var poolingParams = config.GetSection("ConnectionPooling");
+            var templates = config.GetSection("ConnectionTemplates");
+
+            var template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
+
+            var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+            if (string.IsNullOrEmpty(dbPassword))
+            {
+                throw new InvalidOperationException("Variable de entorno DB_PASSWORD no encontrada para Production");
+            }
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["server"] = connectionParams["server"] ?? throw new InvalidOperationException("Server no configurado para Production"),
+                ["database"] = config["Catalog:DatabaseName"] ?? "CatalogDB_Prod", // ← BD de producción
+                ["user"] = connectionParams["user"] ?? "sa",
+                ["password"] = dbPassword,
+                ["trust"] = connectionParams["trust"] ?? "true",
+                ["pooling"] = poolingParams["pooling"] ?? "true",
+                ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100", // Más conexiones en prod
+                ["minPoolSize"] = poolingParams["minPoolSize"] ?? "5",
+                ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30",
+                ["commandTimeout"] = poolingParams["commandTimeout"] ?? "45" // Más tiempo para comandos complejos
+            };
+
+            var connectionString = BuildConnectionString(template, parameters);
+
+            return new CatalogConfiguration
+            {
+                Environment = "Production",
+                ConnectionString = connectionString,
+                Database = new DatabaseConfiguration
+                {
+                    MaxRetryCount = 10, // Más reintentos en prod
+                    MaxRetryDelaySeconds = 60, // Delays más largos
+                    EnableDetailedErrors = false, // ← Seguridad en prod
+                    EnableSensitiveDataLogging = false // ← Nunca en prod
+                },
+                Logging = new LoggingConfiguration
+                {
+                    MinimumLevel = "Warning", // ← Solo warnings/errors
+                    EnableFileLogging = true,
+                    RetainedFileCountLimit = 30 // ← Más logs en prod
+                },
+                Grpc = new GrpcConfiguration
+                {
+                    EnableDetailedErrors = false, // ← Sin detalles en prod
+                    MaxMessageSizeMB = 8, // ← Más conservador pero funcional
+                    CompressionLevel = "Optimal" // Mejor compresión en prod
                 }
             };
         }

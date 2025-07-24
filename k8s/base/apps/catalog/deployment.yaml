@@ -32,8 +32,6 @@ spec:
             secretKeyRef:
               name: catalog-secrets
               key: RABBITMQ_PASSWORD
-        - name: ASPNETCORE_ENVIRONMENT 
-          value: "Kubernetes"
         ports:
         - containerPort: 80
         - containerPort: 7205
