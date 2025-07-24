@@ -50,8 +50,16 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "overlays", "overlays", "{72D57402-6776-4AA2-89A7-985EE472FBFB}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "development", "development", "{06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\kustomization.yaml = k8s\overlays\development\kustomization.yaml
+		k8s\overlays\development\namespace.yaml = k8s\overlays\development\namespace.yaml
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "production", "production", "{0072CF27-078C-477F-81BE-CF4AD59B9261}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\production\kustomization.yaml = k8s\overlays\production\kustomization.yaml
+		k8s\overlays\production\namespace.yaml = k8s\overlays\production\namespace.yaml
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "base", "base", "{65E34109-8D8F-4C4C-8F6F-1BF50922642B}"
 EndProject
@@ -166,11 +174,11 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "staging", "staging", "{4A2E8487-1833-43B9-9C0C-879BA4987DED}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "patches", "patches", "{F0F3BB09-DD6A-4884-8FF0-D7CD58237267}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\apps\patches\environment.yaml = k8s\overlays\development\apps\patches\environment.yaml
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{D3EF28FA-C78F-449A-8CFE-90FFC547433A}"
-	ProjectSection(SolutionItems) = preProject
-		k8s\overlays\development\apps\kustomization.yaml = k8s\overlays\development\apps\kustomization.yaml
-	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "monitoring", "monitoring", "{24CFF405-DBAD-4B43-9B30-AB8D61E95E67}"
 	ProjectSection(SolutionItems) = preProject
@@ -180,12 +188,25 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{AF358A06-4B82-494F-969D-376E5CA6B859}"
 	ProjectSection(SolutionItems) = preProject
 		k8s\scripts\deploy-dev.sh = k8s\scripts\deploy-dev.sh
+		k8s\scripts\deploy-prod.sh = k8s\scripts\deploy-prod.sh
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "namespaces", "namespaces", "{39620063-92EA-4752-91E4-768D56847B62}"
 	ProjectSection(SolutionItems) = preProject
 		k8s\base\infrastructure\namespaces\dev-namespace.yaml = k8s\base\infrastructure\namespaces\dev-namespace.yaml
 		k8s\base\infrastructure\namespaces\kustomization.yaml = k8s\base\infrastructure\namespaces\kustomization.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{837296EE-DD1C-43C8-9621-8CC6491B40FA}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "patches", "patches", "{DFEDB4FD-E103-40DC-8775-ABCF5E0875FF}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\production\apps\patches\environment.yaml = k8s\overlays\production\apps\patches\environment.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "monitoring", "monitoring", "{16B58B83-1C33-402C-8E58-FA8C0796D213}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\production\monitoring\kustomization.yaml = k8s\overlays\production\monitoring\kustomization.yaml
 	EndProjectSection
 EndProject
 Global
@@ -324,6 +345,9 @@ Global
 		{24CFF405-DBAD-4B43-9B30-AB8D61E95E67} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
 		{AF358A06-4B82-494F-969D-376E5CA6B859} = {E4C00B5E-3699-44B8-8CA1-97577B858B48}
 		{39620063-92EA-4752-91E4-768D56847B62} = {F6594F67-77AF-42B1-BDA9-A92BC328C677}
+		{837296EE-DD1C-43C8-9621-8CC6491B40FA} = {0072CF27-078C-477F-81BE-CF4AD59B9261}
+		{DFEDB4FD-E103-40DC-8775-ABCF5E0875FF} = {837296EE-DD1C-43C8-9621-8CC6491B40FA}
+		{16B58B83-1C33-402C-8E58-FA8C0796D213} = {0072CF27-078C-477F-81BE-CF4AD59B9261}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}
