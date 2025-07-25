@@ -1,0 +1,7 @@
+- op: add
+  path: /spec/egress/-
+  value:
+    to: []
+    ports:
+    - protocol: TCP
+      port: 1433

@@ -33,3 +33,15 @@ patches:
     target:
       kind: Deployment
       name: user-service
+  - path: network-policies/sql-connection-patch.yaml
+    target:
+      kind: NetworkPolicy
+      name: user-service-policy
+  - path: network-policies/sql-connection-patch.yaml  
+    target:
+      kind: NetworkPolicy
+      name: catalog-service-policy
+  - path: network-policies/sql-connection-patch.yaml
+    target:
+      kind: NetworkPolicy
+      name: cart-service-policy

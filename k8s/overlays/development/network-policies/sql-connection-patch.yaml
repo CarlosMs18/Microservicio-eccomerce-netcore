@@ -1,0 +1,10 @@
+- op: add
+  path: /spec/egress/-
+  value:
+    to:
+    - podSelector:
+        matchLabels:
+          app: sql-server
+    ports:
+    - protocol: TCP
+      port: 1433
