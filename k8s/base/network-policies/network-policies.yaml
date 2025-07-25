@@ -64,6 +64,10 @@ spec:
       port: 1433
   - to: []
     ports:
+    - protocol: TCP
+      port: 1433
+  - to: []
+    ports:
     - protocol: UDP
       port: 53
 ---
