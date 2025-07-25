@@ -59,6 +59,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "production", "production", 
 	ProjectSection(SolutionItems) = preProject
 		k8s\overlays\production\kustomization.yaml = k8s\overlays\production\kustomization.yaml
 		k8s\overlays\production\namespace.yaml = k8s\overlays\production\namespace.yaml
+		k8s\overlays\production\sql-secrets.yaml = k8s\overlays\production\sql-secrets.yaml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "base", "base", "{65E34109-8D8F-4C4C-8F6F-1BF50922642B}"

@@ -5,7 +5,7 @@ resources:
   - ../../base/apps/user
   - ../../base/apps/catalog
   - ../../base/apps/cart
-  - ../../base/infrastructure/database
+  - sql-secrets.yaml
   - ../../base/infrastructure/messaging
   - ../../base/infrastructure/ingress
   - ../../base/network-policies

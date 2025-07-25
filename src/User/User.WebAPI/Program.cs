@@ -21,7 +21,7 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("👤 Iniciando User Service!");
+    Log.Information("👤 Iniciando User Service!!!");
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -96,7 +96,8 @@ static void ConfigureSerilog(WebApplicationBuilder builder, string environment)
 {
     builder.Host.UseSerilog((ctx, services, config) =>
     {
-        var logLevel = environment == "Production" ? LogEventLevel.Warning : LogEventLevel.Information;
+        //var logLevel = environment == "Production" ? LogEventLevel.Warning : LogEventLevel.Information;
+        var logLevel = LogEventLevel.Information;
 
         config.MinimumLevel.Is(logLevel)
               .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
