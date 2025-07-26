@@ -1,4 +1,4 @@
-name: Test User Migration - SIMPLE
+name: Test User Migration
 
 on:
   push:
@@ -28,10 +28,12 @@ jobs:
           
       - name: Test Database Connection
         run: |
-          echo " Testing database connection..."
-          
-     
-          cat > test-db.cs << 'EOF'
+          echo "Testing database connection"
+          mkdir temp-test
+          cd temp-test
+          dotnet new console
+          dotnet add package System.Data.SqlClient
+          cat > Program.cs << 'EOF'
           using System;
           using System.Data.SqlClient;
           
@@ -40,56 +42,46 @@ jobs:
               var conn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
               using var connection = new SqlConnection(conn);
               connection.Open();
-              Console.WriteLine(" CONEXIÓN OK");
+              Console.WriteLine("Connection successful");
               using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
               var count = cmd.ExecuteScalar();
-              Console.WriteLine($"Tablas encontradas: {count}");
+              Console.WriteLine($"Tables found: {count}");
           }
           catch(Exception ex)
           {
-              Console.WriteLine($" ERROR: {ex.Message}");
+              Console.WriteLine($"Connection failed: {ex.Message}");
               Environment.Exit(1);
           }
           EOF
-          
-          dotnet script test-db.cs
+          dotnet run
+          cd ..
           
       - name: Build User Service
         run: |
-          echo " Building User service..."
+          echo "Building User service"
           cd src/User/User.WebAPI
           dotnet build --configuration Release
           
       - name: Check Migrations
         run: |
-          echo " Checking migrations..."
+          echo "Checking migrations"
           cd src/User/User.WebAPI
-          
           export ConnectionStrings__DefaultConnection="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-          
-          echo "Migraciones disponibles:"
+          echo "Available migrations:"
           dotnet ef migrations list --no-build || echo "No migrations found"
           
       - name: Apply Migrations
         run: |
-          echo " Applying migrations..."
+          echo "Applying migrations"
           cd src/User/User.WebAPI
-          
           export ConnectionStrings__DefaultConnection="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-          
-      
           dotnet ef database update --no-build --verbose
-          
-          echo " MIGRACIONES APLICADAS"
+          echo "Migrations applied successfully"
           
       - name: Verify Results
         run: |
-          echo "Verificando resultados..."
+          echo "Verifying results"
           cd src/User/User.WebAPI
-          
           export ConnectionStrings__DefaultConnection="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-          
-       
           dotnet ef migrations list --no-build
-          
-          echo " TEST COMPLETADO"
+          echo "Test completed"
