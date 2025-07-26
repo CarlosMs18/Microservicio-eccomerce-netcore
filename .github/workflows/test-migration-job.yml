@@ -66,9 +66,12 @@ jobs:
         run: |
           echo "Checking migrations"
           cd src/User/User.WebAPI
-          export ConnectionStrings__DefaultConnection="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+          export DB_SERVER="microservices-sql-server.database.windows.net"
+          export DB_NAME="microservices-db"
+          export DB_USER="sqladmin"
+          export DB_PASSWORD="Admin123!"
           export ASPNETCORE_ENVIRONMENT="Production"
-          echo "Connection string set to Azure SQL"
+          echo "Database variables configured"
           echo "Available migrations:"
           dotnet ef migrations list --configuration Release || echo "No migrations found"
           
@@ -76,19 +79,25 @@ jobs:
         run: |
           echo "Applying migrations"
           cd src/User/User.WebAPI
-          export ConnectionStrings__DefaultConnection="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+          export DB_SERVER="microservices-sql-server.database.windows.net"
+          export DB_NAME="microservices-db"
+          export DB_USER="sqladmin"
+          export DB_PASSWORD="Admin123!"
           export ASPNETCORE_ENVIRONMENT="Production"
-          echo "Forcing Azure SQL connection"
+          echo "Setting up database environment variables"
           dotnet clean
           dotnet build --configuration Release
-          dotnet ef database update --configuration Release --verbose --connection "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+          dotnet ef database update --configuration Release --verbose
           echo "Migrations applied successfully"
           
       - name: Verify Results
         run: |
           echo "Verifying results"
           cd src/User/User.WebAPI
-          export ConnectionStrings__DefaultConnection="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+          export DB_SERVER="microservices-sql-server.database.windows.net"
+          export DB_NAME="microservices-db"
+          export DB_USER="sqladmin"
+          export DB_PASSWORD="Admin123!"
           export ASPNETCORE_ENVIRONMENT="Production"
-          dotnet ef migrations list --configuration Release --connection "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+          dotnet ef migrations list --configuration Release
           echo "Test completed"
