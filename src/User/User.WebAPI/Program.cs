@@ -56,12 +56,22 @@ finally
 
 static string DetectEnvironment()
 {
+    // 🔥 PRIORIDAD: ASPNETCORE_ENVIRONMENT tiene la máxima prioridad
+    var aspnetEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+    if (!string.IsNullOrEmpty(aspnetEnv))
+    {
+        Log.Information("🎯 Usando ASPNETCORE_ENVIRONMENT: {Environment}", aspnetEnv);
+        return aspnetEnv;
+    }
+
+    // Fallbacks para otros entornos
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
         return "CI";
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
         return "Kubernetes";
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
         return "Docker";
+
     return "Development";
 }
 
