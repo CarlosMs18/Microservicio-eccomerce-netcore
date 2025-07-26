@@ -179,46 +179,22 @@ jobs:
           
           echo "Monitoring migration job for $SERVICE service"
           
-       
+     
           kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }}
           
         
-          for i in {1..10}; do
-            echo "=== Minute $i - Checking job status ==="
-            
-           
-            kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }}
-            
-            
-            echo "Current pod logs:"
-            kubectl logs -l service=${SERVICE} -n ${{ env.NAMESPACE }} --tail=20 || echo "No logs yet"
-            
-           
-            if kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }} -o jsonpath='{.items[0].status.conditions[?(@.type=="Complete")].status}' | grep -q "True"; then
-              echo "Migration completed successfully!"
-              break
-            fi
-            
-            if kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }} -o jsonpath='{.items[0].status.conditions[?(@.type=="Failed")].status}' | grep -q "True"; then
-              echo "Migration failed!"
-              kubectl describe job -l service=${SERVICE} -n ${{ env.NAMESPACE }}
-              kubectl logs -l service=${SERVICE} -n ${{ env.NAMESPACE }} --tail=100
-              exit 1
-            fi
-            
-            echo "Still running, waiting 60 seconds..."
-            sleep 60
-          done
+          kubectl wait --for=condition=complete job -l service=${SERVICE} -n ${{ env.NAMESPACE }} --timeout=600s || {
+            echo "Migration job failed or timed out"
+            echo "Job description:"
+            kubectl describe job -l service=${SERVICE} -n ${{ env.NAMESPACE }}
+            echo "Pod logs:"
+            kubectl logs -l service=${SERVICE} -n ${{ env.NAMESPACE }} --tail=100
+            echo "Pod description:"
+            kubectl describe pods -l service=${SERVICE} -n ${{ env.NAMESPACE }}
+            exit 1
+          }
           
-          
-          echo "Migration timed out after 10 minutes"
-          echo "Final job description:"
-          kubectl describe job -l service=${SERVICE} -n ${{ env.NAMESPACE }}
-          echo "Final pod logs:"
-          kubectl logs -l service=${SERVICE} -n ${{ env.NAMESPACE }} --tail=100
-          echo "Pod description:"
-          kubectl describe pods -l service=${SERVICE} -n ${{ env.NAMESPACE }}
-          exit 1
+          echo "Migration completed successfully for $SERVICE service"
           
       - name: Verify migration results
         run: |
