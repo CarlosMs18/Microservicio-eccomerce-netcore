@@ -44,11 +44,12 @@ namespace Shared.Core.Handlers
                     Console.WriteLine($"Testing UserId desde Claims: {testUserId}");
                     return testUserId;
 
+                case "Production":
                 case "Kubernetes":
-                    // ✅ KUBERNETES: Leer desde headers del Ingress
-                    var kubeUserId = context.Request.Headers["x-user-id"].ToString();
-                    Console.WriteLine($"Kubernetes UserId desde Headers: {kubeUserId}");
-                    return kubeUserId;
+                    // ✅ PRODUCTION/KUBERNETES: Leer desde headers del Ingress
+                    var ingressUserId = context.Request.Headers["x-user-id"].ToString();
+                    Console.WriteLine($"{environment} UserId desde Headers: {ingressUserId}");
+                    return ingressUserId;
 
                 default: // Development/Docker
                     // ✅ DEVELOPMENT/DOCKER: Leer desde Claims (middleware)
@@ -71,19 +72,28 @@ namespace Shared.Core.Handlers
             {
                 case "CI":
                     // ✅ CI: Leer desde Claims
-                    return context.User?.FindFirst(ClaimTypes.Email)?.Value;
+                    var ciEmail = context.User?.FindFirst(ClaimTypes.Email)?.Value;
+                    Console.WriteLine($"CI Email desde Claims: {ciEmail}");
+                    return ciEmail;
 
                 case "Testing":
                     // ✅ TESTING: Leer desde Claims
-                    return context.User?.FindFirst(ClaimTypes.Email)?.Value;
+                    var testEmail = context.User?.FindFirst(ClaimTypes.Email)?.Value;
+                    Console.WriteLine($"Testing Email desde Claims: {testEmail}");
+                    return testEmail;
 
+                case "Production":
                 case "Kubernetes":
-                    // ✅ KUBERNETES: Leer desde headers del Ingress
-                    return context.Request.Headers["x-user-email"].ToString();
+                    // ✅ PRODUCTION/KUBERNETES: Leer desde headers del Ingress
+                    var ingressEmail = context.Request.Headers["x-user-email"].ToString();
+                    Console.WriteLine($"{environment} Email desde Headers: {ingressEmail}");
+                    return ingressEmail;
 
                 default: // Development/Docker
                     // ✅ DEVELOPMENT/DOCKER: Leer desde Claims
-                    return context.User?.FindFirst(ClaimTypes.Email)?.Value;
+                    var devEmail = context.User?.FindFirst(ClaimTypes.Email)?.Value;
+                    Console.WriteLine($"Development Email desde Claims: {devEmail}");
+                    return devEmail;
             }
         }
 
@@ -100,43 +110,54 @@ namespace Shared.Core.Handlers
             {
                 case "CI":
                     // ✅ CI: Leer desde Claims
-                    return context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
+                    var ciRoles = context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
                            ?? new List<string>();
+                    Console.WriteLine($"CI Roles desde Claims: {string.Join(",", ciRoles)}");
+                    return ciRoles;
 
                 case "Testing":
                     // ✅ TESTING: Leer desde Claims
-                    return context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
+                    var testRoles = context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
                            ?? new List<string>();
+                    Console.WriteLine($"Testing Roles desde Claims: {string.Join(",", testRoles)}");
+                    return testRoles;
 
+                case "Production":
                 case "Kubernetes":
-                    // ✅ KUBERNETES: Leer desde headers del Ingress
+                    // ✅ PRODUCTION/KUBERNETES: Leer desde headers del Ingress
                     var rolesHeader = context.Request.Headers["x-user-roles"].ToString();
-                    return string.IsNullOrEmpty(rolesHeader)
+                    var ingressRoles = string.IsNullOrEmpty(rolesHeader)
                         ? new List<string>()
                         : rolesHeader.Split(',', StringSplitOptions.RemoveEmptyEntries)
                                      .Select(r => r.Trim())
                                      .ToList();
+                    Console.WriteLine($"{environment} Roles desde Headers: {string.Join(",", ingressRoles)}");
+                    return ingressRoles;
 
                 default: // Development/Docker
                     // ✅ DEVELOPMENT/DOCKER: Leer desde Claims
-                    return context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
+                    var devRoles = context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
                            ?? new List<string>();
+                    Console.WriteLine($"Development Roles desde Claims: {string.Join(",", devRoles)}");
+                    return devRoles;
             }
         }
 
-        // Método helper para detectar entorno (actualizado para incluir CI)
+        // Método helper para detectar entorno
         private string DetectEnvironment()
         {
-            // 🆕 PRIORIDAD 1: Detectar CI primero
+            // 🔥 PRIORIDAD: ASPNETCORE_ENVIRONMENT tiene la máxima prioridad
+            var aspnetEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            if (!string.IsNullOrEmpty(aspnetEnv))
+            {
+                return aspnetEnv;
+            }
+
+            // Fallbacks para otros entornos
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
                 return "CI";
-
-            var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-            if (env == "Testing") return "Testing";
-
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
                 return "Kubernetes";
-
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
                 return "Docker";
 
