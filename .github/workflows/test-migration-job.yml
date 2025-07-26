@@ -68,14 +68,16 @@ jobs:
           cd src/User/User.WebAPI
           export ConnectionStrings__DefaultConnection="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
           echo "Available migrations:"
-          dotnet ef migrations list --no-build || echo "No migrations found"
+          dotnet ef migrations list --configuration Release || echo "No migrations found"
           
       - name: Apply Migrations
         run: |
           echo "Applying migrations"
           cd src/User/User.WebAPI
           export ConnectionStrings__DefaultConnection="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-          dotnet ef database update --no-build --verbose
+          dotnet clean
+          dotnet build --configuration Release
+          dotnet ef database update --configuration Release --verbose
           echo "Migrations applied successfully"
           
       - name: Verify Results
@@ -83,5 +85,5 @@ jobs:
           echo "Verifying results"
           cd src/User/User.WebAPI
           export ConnectionStrings__DefaultConnection="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-          dotnet ef migrations list --no-build
+          dotnet ef migrations list --configuration Release
           echo "Test completed"
