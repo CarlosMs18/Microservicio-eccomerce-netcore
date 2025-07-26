@@ -165,13 +165,13 @@ jobs:
           find k8s -name "kustomization.yaml" -type f
           
           echo "=== Apps kustomization content ==="
-          cat k8s/overlays/development/apps/kustomization.yaml
+          cat k8s/overlays/development/kustomization.yaml
           
           echo "=== Monitoring kustomization content ==="
           cat k8s/overlays/development/monitoring/kustomization.yaml
           
           echo "=== Testing kustomize build for apps ==="
-          kubectl kustomize k8s/overlays/development/apps/ || echo "Apps kustomization failed"
+          kubectl kustomize k8s/overlays/development/ || echo "Apps kustomization failed"
           
           echo "=== Testing kustomize build for monitoring ==="
           kubectl kustomize k8s/overlays/development/monitoring/ || echo "Monitoring kustomization failed"
