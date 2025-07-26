@@ -150,7 +150,6 @@ namespace User.Infrastructure.Configuration
                 ["database"] = config["User:DatabaseName"] ?? "UserDB_Testing",
                 ["user"] = connectionParams["user"] ?? "sa",
                 ["password"] = connectionParams["password"] ?? "P@ssw0rd123!",
-                ["encrypt"] = connectionParams["encrypt"] ?? "false",
                 ["trust"] = connectionParams["trust"] ?? "true",
                 ["pooling"] = poolingParams["pooling"] ?? "true",
                 ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "50",
@@ -204,7 +203,6 @@ namespace User.Infrastructure.Configuration
             {
                 ["server"] = connectionParams["server"] ?? "(localdb)\\mssqllocaldb",
                 ["database"] = config["User:DatabaseName"] ?? "UserDB_Testing", // 👈 BD diferente para tests
-                ["encrypt"] = connectionParams["encrypt"] ?? "false",
                 ["trusted"] = connectionParams["trusted"] ?? "true",
                 ["pooling"] = poolingParams["pooling"] ?? "true",
                 ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100",
