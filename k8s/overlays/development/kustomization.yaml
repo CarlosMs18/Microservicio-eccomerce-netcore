@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml                   
+  - ../../base/apps/user
+  - ../../base/apps/catalog
+  - ../../base/apps/cart
+  - ../../base/infrastructure/database
+  - ../../base/infrastructure/messaging
+  - ../../base/infrastructure/ingress
+  - ../../base/network-policies
+namespace: dev
+images:
+  - name: carlosms18/microservicio-usuario:latest
+    newName: carlosms18/microservicio-usuario
+    newTag: dev
+  - name: carlosms18/microservicio-catalog:latest
+    newName: carlosms18/microservicio-catalog
+    newTag: dev
+  - name: carlosms18/microservicio-cart:latest
+    newName: carlosms18/microservicio-cart
+    newTag: dev
+patches:
+  - path: apps/patches/environment.yaml
+    target:
+      kind: Deployment
+      name: cart-service
+  - path: apps/patches/environment.yaml
+    target:
+      kind: Deployment
+      name: catalog-service
+  - path: apps/patches/environment.yaml
+    target:
+      kind: Deployment
+      name: user-service
+  - path: network-policies/sql-connection-patch.yaml
+    target:
+      kind: NetworkPolicy
+      name: user-service-policy
+  - path: network-policies/sql-connection-patch.yaml  
+    target:
+      kind: NetworkPolicy
+      name: catalog-service-policy
+  - path: network-policies/sql-connection-patch.yaml
+    target:
+      kind: NetworkPolicy
+      name: cart-service-policy

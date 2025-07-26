@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cart-service
-  namespace: dev
 spec:
   replicas: 1
   selector:
@@ -15,7 +14,7 @@ spec:
     spec:
       containers:
       - name: cart-service
-        image: carlosms18/microservicio-cart:dev
+        image: carlosms18/microservicio-cart:latest
         imagePullPolicy: Always
         env:
         - name: DB_PASSWORD 
@@ -33,8 +32,6 @@ spec:
             secretKeyRef:
               name: cart-secrets
               key: RABBITMQ_PASSWORD
-        - name: ASPNETCORE_ENVIRONMENT 
-          value: "Kubernetes"
         ports:
         - containerPort: 80
         - containerPort: 7206

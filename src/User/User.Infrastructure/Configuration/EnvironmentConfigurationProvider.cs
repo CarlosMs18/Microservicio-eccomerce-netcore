@@ -8,12 +8,75 @@ namespace User.Infrastructure.Configuration
         {
             return environment switch
             {
+                "Production" => GetProductionConfig(config),
                 "Development" => GetDevelopmentConfig(config),
                 "Docker" => GetDockerConfig(config),
                 "Kubernetes" => GetKubernetesConfig(config),
                 "Testing" => GetTestingConfig(config),
                 "CI" => GetCIConfig(config),
                 _ => throw new InvalidOperationException($"Entorno {environment} no soportado")
+            };
+        }
+        private static UserConfiguration GetProductionConfig(IConfiguration config)
+        {
+            var connectionParams = config.GetSection("ConnectionParameters");
+            var poolingParams = config.GetSection("ConnectionPooling");
+            var templates = config.GetSection("ConnectionTemplates");
+
+            var template = templates["Azure"] ?? throw new InvalidOperationException("Template Azure no encontrado");
+
+            var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+            if (string.IsNullOrEmpty(dbPassword))
+            {
+                throw new InvalidOperationException("Variable de entorno DB_PASSWORD no encontrada para Production");
+            }
+
+            var parameters = new Dictionary<string, string>
+            {
+                ["server"] = connectionParams["server"] ?? throw new InvalidOperationException("Server no configurado para Production"),
+                ["database"] = config["User:DatabaseName"] ?? "microservices-db", // ← BD de producción
+                ["user"] = connectionParams["user"] ?? "sa",
+                ["password"] = dbPassword,
+                ["trust"] = connectionParams["trust"] ?? "true",
+                ["encrypt"] = connectionParams["encrypt"] ?? "true",
+                ["pooling"] = poolingParams["pooling"] ?? "true",
+                ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100", // Más conexiones en prod
+                ["minPoolSize"] = poolingParams["minPoolSize"] ?? "5",
+                ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30",
+                ["commandTimeout"] = poolingParams["commandTimeout"] ?? "45"
+            };
+
+            var connectionString = BuildConnectionString(template, parameters);
+
+            return new UserConfiguration
+            {
+                Environment = "Production",
+                ConnectionString = connectionString,
+                Database = new DatabaseConfiguration
+                {
+                    MaxRetryCount = 10,
+                    MaxRetryDelaySeconds = 60,
+                    EnableDetailedErrors = false,      // ← Seguridad en prod
+                    EnableSensitiveDataLogging = false // ← Nunca en prod
+                },
+                Logging = new LoggingConfiguration
+                {
+                    MinimumLevel = "Warning",          // ← Solo warnings/errors
+                    EnableFileLogging = true,
+                    RetainedFileCountLimit = 30        // ← Más logs en prod
+                },
+                Identity = new IdentityConfiguration
+                {
+                    RequireUniqueEmail = true,
+                    MaxFailedAccessAttempts = 3,       // ← Más estricto
+                    LockoutTimeSpanMinutes = 60        // ← Lockout más largo
+                },
+                Grpc = new GrpcConfiguration
+                {
+                    EnableDetailedErrors = false,      // ← Sin detalles en prod
+                    MaxMessageSizeMB = 8,              // ← Más conservador
+                    EnableCompression = true
+                }
             };
         }
 
@@ -29,6 +92,7 @@ namespace User.Infrastructure.Configuration
             {
                 ["server"] = connectionParams["server"] ?? "(localdb)\\mssqllocaldb",
                 ["database"] = config["User:DatabaseName"] ?? "UserDB_Dev",
+                ["encrypt"] = connectionParams["encrypt"] ?? "false",
                 ["trusted"] = connectionParams["trusted"] ?? "true",
                 ["pooling"] = poolingParams["pooling"] ?? "true",
                 ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100",
@@ -195,6 +259,7 @@ namespace User.Infrastructure.Configuration
                 ["database"] = config["User:DatabaseName"] ?? "UserDB_Dev",
                 ["user"] = connectionParams["user"] ?? "sa",
                 ["password"] = connectionParams["password"] ?? throw new InvalidOperationException("Password requerido para Docker"),
+                ["encrypt"] = connectionParams["encrypt"] ?? "false",
                 ["trust"] = connectionParams["trust"] ?? "true",
                 ["pooling"] = poolingParams["pooling"] ?? "true",
                 ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100",

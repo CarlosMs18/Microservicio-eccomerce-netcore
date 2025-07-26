@@ -3,12 +3,10 @@ using Prometheus;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
-using Shared.Infrastructure.Interfaces;
 using User.Infrastructure;
 using User.Infrastructure.Extensions;
 using User.Infrastructure.Persistence;
 using User.Infrastructure.Services.External.Grpc;
-using User.Infrastructure.Services.Internal;
 using User.WebAPI.Middlewares;
 using Users.Application;
 
@@ -21,8 +19,8 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("👤 Iniciando User Service!");
-    
+    Log.Information("👤 Iniciando User Service");
+
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -44,7 +42,7 @@ try
 
     builder.Configuration.LogEndpointsConfiguration(environment, restPort, grpcPort);
 
-    Log.Information("✅ User Service listo y ejecutándose.");
+    Log.Information("✅ User Service listo y ejecutándose en entorno: {Environment}", environment);
     await app.RunAsync();
 }
 catch (Exception ex)
@@ -59,12 +57,22 @@ finally
 
 static string DetectEnvironment()
 {
+    // 🔥 PRIORIDAD: ASPNETCORE_ENVIRONMENT tiene la máxima prioridad
+    var aspnetEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+    if (!string.IsNullOrEmpty(aspnetEnv))
+    {
+        Log.Information("🎯 Usando ASPNETCORE_ENVIRONMENT: {Environment}", aspnetEnv);
+        return aspnetEnv;
+    }
+
+    // Fallbacks para otros entornos
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
         return "CI";
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
         return "Kubernetes";
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
         return "Docker";
+
     return "Development";
 }
 
@@ -74,15 +82,23 @@ static void ConfigureAppSettings(WebApplicationBuilder builder, string environme
 
     builder.Configuration
         .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-        .AddJsonFile($"appsettings.{environment}.json", optional: true)
+        .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: true)
         .AddEnvironmentVariables();
+
+    // 🔥 Log de configuración cargada
+    Log.Information("📋 Configuraciones cargadas:");
+    Log.Information("   - appsettings.json");
+    Log.Information("   - appsettings.{Environment}.json", environment);
 }
 
 static void ConfigureSerilog(WebApplicationBuilder builder, string environment)
 {
     builder.Host.UseSerilog((ctx, services, config) =>
     {
-        config.MinimumLevel.Information()
+        //var logLevel = environment == "Production" ? LogEventLevel.Warning : LogEventLevel.Information;
+        var logLevel = LogEventLevel.Information;
+
+        config.MinimumLevel.Is(logLevel)
               .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
               .MinimumLevel.Override("System", LogEventLevel.Warning)
               .Enrich.FromLogContext()
@@ -91,7 +107,7 @@ static void ConfigureSerilog(WebApplicationBuilder builder, string environment)
                   new CompactJsonFormatter(),
                   $"logs/{environment.ToLower()}-log-.json",
                   rollingInterval: RollingInterval.Day,
-                  retainedFileCountLimit: 15));
+                  retainedFileCountLimit: environment == "Production" ? 30 : 15));
     });
 }
 
@@ -102,6 +118,8 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
     var restPort = portsConfig.GetValue<int>("Rest");
     var grpcPort = portsConfig.GetValue<int>("Grpc");
 
+    Log.Information("🚪 Configurando puertos - REST: {RestPort}, gRPC: {GrpcPort}", restPort, grpcPort);
+
     // Servicios básicos
     builder.Services.AddControllers();
     builder.Services.AddHttpContextAccessor();
@@ -110,7 +128,6 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration, environment);
 
-   
     // Health Checks
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<UserIdentityDbContext>(
@@ -120,20 +137,23 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
             Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Service is responsive"),
             tags: new[] { "service" });
 
-    // Swagger solo para desarrollo
-    if (environment == "Development")
+    // Swagger solo para desarrollo y Kubernetes (no para Production)
+    if (environment == "Development" || environment == "Kubernetes")
     {
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
         {
             c.SwaggerDoc("v1", new() { Title = "User API", Version = "v1" });
         });
+        Log.Information("📖 Swagger habilitado para entorno: {Environment}", environment);
     }
 
     // Configuración de Kestrel
     builder.WebHost.ConfigureKestrel(options =>
     {
-        options.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10MB
+        // Límites más estrictos en producción
+        var maxBodySize = environment == "Production" ? 5 * 1024 * 1024 : 10 * 1024 * 1024; // 5MB en prod, 10MB en dev
+        options.Limits.MaxRequestBodySize = maxBodySize;
         options.Limits.MinRequestBodyDataRate = null;
 
         // REST Endpoint
@@ -156,8 +176,8 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
 
 static void ConfigureMiddleware(WebApplication app, string environment)
 {
-    // Swagger solo para desarrollo
-    if (environment == "Development")
+    // Swagger solo para desarrollo y Kubernetes (no para Production)
+    if (environment == "Development" || environment == "Kubernetes")
     {
         app.UseSwagger();
         app.UseSwaggerUI(c =>
@@ -206,7 +226,6 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     // gRPC Service
     app.MapGrpcService<AuthGrpcService>();
-
 }
 
 public partial class Program { }

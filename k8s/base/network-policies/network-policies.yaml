@@ -2,7 +2,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-all
-  namespace: dev
 spec:
   podSelector: {}
   policyTypes:
@@ -20,7 +19,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: user-service-policy
-  namespace: dev
 spec:
   podSelector:
     matchLabels:
@@ -57,13 +55,6 @@ spec:
     - protocol: TCP
       port: 80 
   egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: sql-server
-    ports:
-    - protocol: TCP
-      port: 1433
   - to: []
     ports:
     - protocol: UDP
@@ -73,7 +64,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: catalog-service-policy
-  namespace: dev
 spec:
   podSelector:
     matchLabels:
@@ -110,13 +100,6 @@ spec:
   - to:
     - podSelector:
         matchLabels:
-          app: sql-server
-    ports:
-    - protocol: TCP
-      port: 1433
-  - to:
-    - podSelector:
-        matchLabels:
           app: rabbitmq-service
     ports:
     - protocol: TCP
@@ -130,7 +113,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: cart-service-policy
-  namespace: dev
 spec:
   podSelector:
     matchLabels:
@@ -178,13 +160,6 @@ spec:
     ports:
     - protocol: TCP
       port: 5672
-  - to:
-    - podSelector:
-        matchLabels:
-          app: sql-server
-    ports:
-    - protocol: TCP
-      port: 1433
   - to: []
     ports:
     - protocol: UDP
@@ -194,7 +169,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: sql-service-policy
-  namespace: dev
 spec:
   podSelector:
     matchLabels:
@@ -220,7 +194,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: rabbitmq-service-policy
-  namespace: dev
 spec:
   podSelector:
     matchLabels:

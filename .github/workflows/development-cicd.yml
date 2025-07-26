@@ -2,7 +2,7 @@ name: Development CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, rama-detalles-prod-testing ]
   pull_request:
     branches: [ main ]
 
@@ -165,13 +165,13 @@ jobs:
           find k8s -name "kustomization.yaml" -type f
           
           echo "=== Apps kustomization content ==="
-          cat k8s/overlays/development/apps/kustomization.yaml
+          cat k8s/overlays/development/kustomization.yaml
           
           echo "=== Monitoring kustomization content ==="
           cat k8s/overlays/development/monitoring/kustomization.yaml
           
           echo "=== Testing kustomize build for apps ==="
-          kubectl kustomize k8s/overlays/development/apps/ || echo "Apps kustomization failed"
+          kubectl kustomize k8s/overlays/development/ || echo "Apps kustomization failed"
           
           echo "=== Testing kustomize build for monitoring ==="
           kubectl kustomize k8s/overlays/development/monitoring/ || echo "Monitoring kustomization failed"
@@ -179,7 +179,7 @@ jobs:
       - name: Deploy to Development
         run: |
           echo "Deploying applications to development environment..."
-          kubectl apply -k k8s/overlays/development/apps/ || echo "Apps deployment failed"
+          kubectl apply -k k8s/overlays/development/ || echo "Apps deployment failed"
           
           echo "Deploying monitoring to development environment..."
           kubectl apply -k k8s/overlays/development/monitoring/ || echo "Monitoring deployment failed"

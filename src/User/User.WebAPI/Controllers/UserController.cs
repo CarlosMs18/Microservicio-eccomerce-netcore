@@ -97,7 +97,8 @@ namespace User.WebAPI.Controllers
 
             Console.WriteLine("LLAMANDO CONTROLADOR DE USER VALIDATE TOKEN HTTP!!");
 
-            var isKubernetesEnvironment = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
+            // ✅ DETECCIÓN SIMPLE: Solo Production y Kubernetes usan Ingress
+            var isIngressEnvironment = IsIngressEnvironment();
 
             try
             {
@@ -105,7 +106,7 @@ namespace User.WebAPI.Controllers
                 // ✅ Validación básica del token (común para ambos entornos)
                 if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
                 {
-                    if (isKubernetesEnvironment)
+                    if (isIngressEnvironment)
                         return CreateErrorResponse(401, "Authentication required", "UNAUTHORIZED");
                     else
                         return Unauthorized();
@@ -119,16 +120,16 @@ namespace User.WebAPI.Controllers
 
                 if (!result.IsValid)
                 {
-                    if (isKubernetesEnvironment)
+                    if (isIngressEnvironment)
                         return CreateErrorResponse(401, "Authentication required", "UNAUTHORIZED");
                     else
                         return Unauthorized();
                 }
 
                 // ✅ Respuesta exitosa según el entorno
-                if (isKubernetesEnvironment)
+                if (isIngressEnvironment)
                 {
-                    // 🔐 KUBERNETES: Inyectar headers de respuesta para el Ingress
+                    // 🔐 PRODUCTION/KUBERNETES: Inyectar headers de respuesta para el Ingress
                     Response.Headers.Add("x-user-id", result.UserId ?? "");
                     Response.Headers.Add("x-user-email", result.Email ?? "");
 
@@ -145,7 +146,7 @@ namespace User.WebAPI.Controllers
                 else
                 {
                     // 🔓 OTROS ENTORNOS: Devolver el objeto completo
-                    Console.WriteLine($"🔓 Entorno no kubernetes: Devolviendo objeto completo");
+                    Console.WriteLine($"🔓 Entorno sin Ingress: Devolviendo objeto completo");
                     return Ok(result);
                 }
             }
@@ -154,7 +155,7 @@ namespace User.WebAPI.Controllers
                 // ❌ Error de conectividad con servicios externos (si los hubiera)
                 Console.WriteLine($"❌ Error de conectividad: {httpEx.Message}");
 
-                if (isKubernetesEnvironment)
+                if (isIngressEnvironment)
                     return CreateErrorResponse(503, "Authentication service unavailable", "AUTH_SERVICE_UNAVAILABLE");
                 else
                     return StatusCode(503, new { error = "Authentication service unavailable", message = httpEx.Message });
@@ -164,7 +165,7 @@ namespace User.WebAPI.Controllers
                 // ⏰ Timeout
                 Console.WriteLine($"⏰ Timeout: {timeoutEx.Message}");
 
-                if (isKubernetesEnvironment)
+                if (isIngressEnvironment)
                     return CreateErrorResponse(503, "Authentication service unavailable", "AUTH_SERVICE_UNAVAILABLE");
                 else
                     return StatusCode(503, new { error = "Authentication service timeout", message = timeoutEx.Message });
@@ -175,7 +176,7 @@ namespace User.WebAPI.Controllers
                 Console.WriteLine($"💥 Error interno en validación de token: {ex.Message}");
                 Console.WriteLine($"💥 Stack trace: {ex.StackTrace}");
 
-                if (isKubernetesEnvironment)
+                if (isIngressEnvironment)
                     return CreateErrorResponse(500, "Authentication service error", "AUTH_SERVICE_ERROR");
                 else
                     return StatusCode(500, new { error = "Internal authentication error", message = ex.Message });
@@ -205,6 +206,22 @@ namespace User.WebAPI.Controllers
             Response.ContentType = "application/json";
 
             return StatusCode(statusCode, errorResponse);
+        }
+
+        /// <summary>
+        /// Detecta si estamos en un entorno que usa Ingress (Production o Kubernetes)
+        /// ✅ SIMPLE Y DIRECTO: Solo dos casos específicos
+        /// </summary>
+        private bool IsIngressEnvironment()
+        {
+            // Production: ASPNETCORE_ENVIRONMENT=Production
+            var aspnetEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            if (aspnetEnv == "Production")
+                return true;
+
+            // Kubernetes: detectar por variable específica
+            var isKubernetes = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
+            return isKubernetes;
         }
     }
 }

@@ -54,18 +54,20 @@ finally
 
 static string DetectEnvironment()
 {
+    // 🔥 PRIORIDAD: ASPNETCORE_ENVIRONMENT tiene la máxima prioridad
+    var aspnetEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+    if (!string.IsNullOrEmpty(aspnetEnv))
+    {
+        Log.Information("🎯 Usando ASPNETCORE_ENVIRONMENT: {Environment}", aspnetEnv);
+        return aspnetEnv;
+    }
+
+    // Fallbacks para otros entornos
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
     {
         Console.WriteLine("🚀 CI ENVIRONMENT DETECTADO");
         Log.Information("🚀 Entorno CI detectado via variable CI");
         return "CI";
-    }
-    var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-    if (env == "Testing")
-    {
-        Console.WriteLine("🧪 TESTING AUTH CONFIGURADO");
-        Log.Information("🧪 Entorno Testing detectado via ASPNETCORE_ENVIRONMENT");
-        return "Testing";
     }
 
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
@@ -73,6 +75,7 @@ static string DetectEnvironment()
         Log.Information("☸️ Entorno Kubernetes detectado");
         return "Kubernetes";
     }
+
     if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
     {
         Log.Information("🐳 Entorno Docker detectado");
@@ -124,25 +127,23 @@ static int ConfigureServices(WebApplicationBuilder builder, string environment)
     builder.Services.AddApplicationServices();
     builder.Services.AddInfrastructureServices(builder.Configuration, environment);
 
+    // 🔐 CONFIGURACIÓN DE AUTENTICACIÓN POR ENTORNO
     if (environment == "Testing" || environment == "CI")
     {
         builder.Services.AddTestingAuthentication();
         Log.Information("🧪 Testing Authentication habilitado - Usuario fake: test-user-123");
     }
-    else if (environment == "Kubernetes")
+    else if (environment == "Kubernetes" || environment == "Production")
     {
-        // Para Kubernetes: Leer headers del Ingress
         builder.Services.AddApiGatewayAuthentication();
-        Log.Information("🔐 ApiGateway Authentication habilitado para Kubernetes");
+        Log.Information("🔐 ApiGateway Authentication habilitado para {Environment}", environment);
     }
     else
     {
-        // Para Development/Docker: El middleware gRPC se encarga
-        // No agregamos autenticación aquí porque el middleware maneja todo
-        Log.Information("🔐 Autenticación será manejada por TokenGrpcValidationMiddleware");
+        Log.Information("🔐 Autenticación será manejada por TokenGrpcValidationMiddleware para {Environment}", environment);
     }
 
-    // Swagger solo para desarrollo
+    // Swagger solo para desarrollo y testing
     if (environment == "Development" || environment == "Testing")
     {
         builder.Services.AddEndpointsApiExplorer();
@@ -167,7 +168,7 @@ static int ConfigureServices(WebApplicationBuilder builder, string environment)
 
 static void ConfigureMiddleware(WebApplication app, string environment)
 {
-    // Swagger solo para desarrollo
+    // Swagger solo para desarrollo y testing
     if (environment == "Development" || environment == "Testing")
     {
         app.UseSwagger();
@@ -182,19 +183,19 @@ static void ConfigureMiddleware(WebApplication app, string environment)
     app.UseRouting();
     app.UseHttpMetrics();
 
+    // 🔐 CONFIGURACIÓN DE MIDDLEWARE DE AUTENTICACIÓN POR ENTORNO
     if (environment == "Testing" || environment == "CI")
     {
         app.UseAuthentication();
         Log.Information("🧪 Testing Authentication middleware habilitado");
     }
-    else if (environment == "Kubernetes")
+    else if (environment == "Kubernetes" || environment == "Production")
     {
         app.UseAuthentication();
-        Log.Information("🔐 ApiGateway Authentication habilitado para Kubernetes");
+        Log.Information("🔐 ApiGateway Authentication middleware habilitado para {Environment}", environment);
     }
     else
     {
-        // Development/Docker: Usar middleware gRPC tradicional
         app.UseMiddleware<TokenGrpcValidationMiddleware>();
         Log.Information("🔐 TokenGrpcValidationMiddleware habilitado para entorno: {Environment}", environment);
     }
@@ -205,4 +206,5 @@ static void ConfigureMiddleware(WebApplication app, string environment)
     app.UseMiddleware<ExceptionMiddleware>();
     app.UseSerilogRequestLogging();
 }
+
 public partial class Program { }
