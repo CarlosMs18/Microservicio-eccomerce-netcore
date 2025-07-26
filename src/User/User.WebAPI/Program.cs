@@ -21,6 +21,7 @@ try
 {
     Log.Information("👤 Iniciando User Service");
 
+
     var builder = WebApplication.CreateBuilder(args);
 
     // 1. Configuración básica
