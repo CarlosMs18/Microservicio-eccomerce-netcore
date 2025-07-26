@@ -179,7 +179,7 @@ jobs:
       - name: Deploy to Development
         run: |
           echo "Deploying applications to development environment..."
-          kubectl apply -k k8s/overlays/development/apps/ || echo "Apps deployment failed"
+          kubectl apply -k k8s/overlays/development/ || echo "Apps deployment failed"
           
           echo "Deploying monitoring to development environment..."
           kubectl apply -k k8s/overlays/development/monitoring/ || echo "Monitoring deployment failed"
