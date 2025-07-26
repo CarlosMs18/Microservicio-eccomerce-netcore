@@ -1,4 +1,4 @@
-name: Simple Migration Test
+name: Test Migration Job
 
 on:
   workflow_dispatch:
@@ -21,10 +21,13 @@ on:
 
 env:
   DOTNET_VERSION: '7.0.x'
+  CLUSTER_NAME: 'migration-test'
+  NAMESPACE: 'migration-test'
 
 jobs:
   test-migration:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,57 +46,195 @@ jobs:
             echo "service=user" >> $GITHUB_OUTPUT
           fi
           
-      - name: Install EF Core tools
-        run: |
-          echo "Installing Entity Framework Core tools..."
-          dotnet tool install --global dotnet-ef --version 7.0.*
-          echo "EF Core tools installed successfully"
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: ${{ env.CLUSTER_NAME }}
+          wait: 300s
           
-      - name: Build service
+      - name: Wait for cluster to be ready
         run: |
-          SERVICE=${{ steps.get-service.outputs.service }}
-          echo "Building $SERVICE service..."
+          echo "Waiting for cluster to be ready..."
+          kubectl cluster-info --context kind-${{ env.CLUSTER_NAME }}
           
-          if [[ "$SERVICE" == "user" ]]; then
-            cd src/User/User.WebAPI
-            dotnet build --configuration Release --no-restore
-            echo "User service built successfully"
-          fi
+          echo "Waiting for node to be Ready (increased timeout)..."
+          kubectl wait --for=condition=Ready nodes --all --timeout=600s
+          
+          echo "Waiting for system pods..."
+          kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s
+          
+          kubectl get nodes -o wide
+          
+      - name: Setup kubectl context
+        run: |
+          kubectl config use-context kind-${{ env.CLUSTER_NAME }}
+          kubectl cluster-info
+          
+      - name: Create local storage class
+        run: |
+          kubectl apply -f - <<EOF
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: local-storage
+            annotations:
+              storageclass.kubernetes.io/is-default-class: "true"
+          provisioner: rancher.io/local-path
+          volumeBindingMode: WaitForFirstConsumer
+          reclaimPolicy: Delete
+          EOF
+          
+      - name: Create test namespace
+        run: |
+          kubectl create namespace ${{ env.NAMESPACE }}
           
       - name: Test Azure SQL Connection
         run: |
           echo "Testing connectivity to Azure SQL Database"
           nslookup microservices-sql-server.database.windows.net || echo "DNS resolution failed"
           
-      - name: Run migration
+      - name: Build service image
         run: |
           SERVICE=${{ steps.get-service.outputs.service }}
-          echo "Running Entity Framework migrations for $SERVICE service"
+          echo "Building $SERVICE service for migration testing"
           
           if [[ "$SERVICE" == "user" ]]; then
-            cd src/User/User.WebAPI
+            echo "Building User service..."
+            dotnet publish src/User/User.WebAPI/User.WebAPI.csproj -c Release -o src/User/User.WebAPI/publish
+            docker build -t user-service:migration-test -f src/User/User.WebAPI/Dockerfile .
             
-            echo "Setting connection string..."
-            export ConnectionStrings__DefaultConnection="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;Persist Security Info=False;User ID=sqladmin;Password=Admin123;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-            export ASPNETCORE_ENVIRONMENT="Development"
+            echo "Loading image to Kind cluster..."
+            kind load docker-image user-service:migration-test --name ${{ env.CLUSTER_NAME }}
             
-            echo "Checking EF installation..."
-            dotnet ef --version
-            
-            echo "Getting database context info..."
-            dotnet ef dbcontext info --verbose || echo "Context info failed"
-            
-            echo "Listing available migrations..."
-            dotnet ef migrations list --verbose || echo "No migrations found"
-            
-            echo "Applying migrations to database..."
-            dotnet ef database update --verbose
-            
-            echo "Migration completed successfully for $SERVICE service"
+            echo "Verifying image was loaded..."
+            docker exec ${{ env.CLUSTER_NAME }}-control-plane crictl images | grep user-service || echo "Image not found in cluster"
+          elif [[ "$SERVICE" == "cart" ]]; then
+            echo "Building Cart service..."
+            dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
+            docker build -t cart-service:migration-test -f src/Cart/Cart.WebAPI/Dockerfile .
+            kind load docker-image cart-service:migration-test --name ${{ env.CLUSTER_NAME }}
+          elif [[ "$SERVICE" == "catalog" ]]; then
+            echo "Building Catalog service..."
+            dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/Catalog.WebApi/publish
+            docker build -t catalog-service:migration-test -f src/Catalog/Catalog.WebApi/Dockerfile .
+            kind load docker-image catalog-service:migration-test --name ${{ env.CLUSTER_NAME }}
           fi
           
-      - name: Verify migration
+          echo "$SERVICE service image loaded successfully"
+
+      - name: Create migration job
         run: |
           SERVICE=${{ steps.get-service.outputs.service }}
-          echo "Migration test completed for $SERVICE service"
-          echo " Database migrations applied successfully"
+          TIMESTAMP=$(date +%s)
+          
+          echo "Creating migration job for $SERVICE service"
+          
+          kubectl apply -f - <<EOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${SERVICE}-migration-${TIMESTAMP}
+            namespace: ${{ env.NAMESPACE }}
+            labels:
+              app: ${SERVICE}-migration
+              service: ${SERVICE}
+          spec:
+            ttlSecondsAfterFinished: 600
+            backoffLimit: 2
+            activeDeadlineSeconds: 600
+            template:
+              metadata:
+                labels:
+                  app: ${SERVICE}-migration
+                  service: ${SERVICE}
+              spec:
+                restartPolicy: Never
+                containers:
+                - name: migration
+                  image: ${SERVICE}-service:migration-test
+                  imagePullPolicy: Never
+                  command: 
+                  - /bin/sh
+                  - -c
+                  - |
+                    echo "Starting database migration for ${SERVICE} service"
+                    echo "Target: Azure SQL Database"
+                    echo "Waiting for dependencies..."
+                    sleep 15
+                    
+                    echo "Installing EF Core tools"
+                    dotnet tool install --global dotnet-ef --version 7.0.* || echo "EF tools already installed"
+                    export PATH="\$PATH:/root/.dotnet/tools"
+                    
+                    echo "Checking EF installation"
+                    dotnet ef --version
+                    
+                    echo "Testing database connection"
+                    dotnet ef dbcontext info --verbose --no-build || echo "Context info failed - continuing anyway"
+                    
+                    echo "Running Entity Framework migrations"
+                    dotnet ef database update --verbose --no-build
+                    
+                    echo "Migration completed successfully"
+                  env:
+                  - name: ASPNETCORE_ENVIRONMENT
+                    value: "Development"
+                  - name: ASPNETCORE_URLS
+                    value: "http://+:80"
+                  - name: ConnectionStrings__DefaultConnection
+                    value: "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;Persist Security Info=False;User ID=sqladmin;Password=Admin123!;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+                  resources:
+                    requests:
+                      memory: "256Mi"
+                      cpu: "100m"
+                    limits:
+                      memory: "512Mi"
+                      cpu: "500m"
+          EOF
+          
+      - name: Monitor migration job
+        run: |
+          SERVICE=${{ steps.get-service.outputs.service }}
+          
+          echo "Monitoring migration job for $SERVICE service"
+          
+          kubectl wait --for=condition=complete job -l service=${SERVICE} -n ${{ env.NAMESPACE }} --timeout=600s || {
+            echo "Job failed or timed out, getting details..."
+            
+            echo "=== Job Status ==="
+            kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }} -o wide
+            
+            echo "=== Job Description ==="
+            kubectl describe job -l service=${SERVICE} -n ${{ env.NAMESPACE }}
+            
+            echo "=== Pod Logs ==="
+            kubectl logs -l service=${SERVICE} -n ${{ env.NAMESPACE }} --tail=100 || echo "No logs available"
+            
+            echo "=== Pod Description ==="
+            kubectl describe pods -l service=${SERVICE} -n ${{ env.NAMESPACE }} || echo "No pods found"
+            
+            # Check if job actually failed
+            if kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }} -o jsonpath='{.items[0].status.conditions[?(@.type=="Failed")].status}' | grep -q "True"; then
+              echo "Migration job FAILED!"
+              exit 1
+            else
+              echo "Migration job TIMED OUT!"
+              exit 1
+            fi
+          }
+          
+          echo "Migration completed successfully!"
+          
+      - name: Verify migration results
+        run: |
+          SERVICE=${{ steps.get-service.outputs.service }}
+          
+          echo "Verifying migration results for $SERVICE service"
+          kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }}
+          kubectl logs -l service=${SERVICE} -n ${{ env.NAMESPACE }} --tail=50
+          
+      - name: Cleanup test environment
+        if: always()
+        run: |
+          echo "Cleaning up test environment"
+          kind delete cluster --name ${{ env.CLUSTER_NAME }} || echo "Cluster already deleted"
