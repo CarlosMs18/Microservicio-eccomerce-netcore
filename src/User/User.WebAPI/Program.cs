@@ -3,12 +3,10 @@ using Prometheus;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
-using Shared.Infrastructure.Interfaces;
 using User.Infrastructure;
 using User.Infrastructure.Extensions;
 using User.Infrastructure.Persistence;
 using User.Infrastructure.Services.External.Grpc;
-using User.Infrastructure.Services.Internal;
 using User.WebAPI.Middlewares;
 using Users.Application;
 
