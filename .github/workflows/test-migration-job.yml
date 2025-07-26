@@ -55,14 +55,7 @@ jobs:
         run: |
           echo "Waiting for cluster to be ready..."
           kubectl cluster-info --context kind-${{ env.CLUSTER_NAME }}
-          
-       
-          echo "Waiting for node to be Ready..."
-          kubectl wait --for=condition=Ready nodes --all --timeout=300s
-          
-    
-          kubectl get nodes -o wide
-          kubectl describe nodes
+          kubectl get nodes --context kind-${{ env.CLUSTER_NAME }}
           
       - name: Setup kubectl context
         run: |
@@ -105,7 +98,7 @@ jobs:
             echo "Loading image to Kind cluster..."
             kind load docker-image user-service:migration-test --name ${{ env.CLUSTER_NAME }}
             
-            
+         
             docker exec -it ${{ env.CLUSTER_NAME }}-control-plane crictl images | grep user-service || echo "Image not found in cluster"
           fi
           
@@ -117,10 +110,6 @@ jobs:
           TIMESTAMP=$(date +%s)
           
           echo "Creating migration job for $SERVICE service"
-          
-          echo "Checking available nodes:"
-          kubectl get nodes
-          kubectl describe nodes | grep -A 5 "Taints"
           
           kubectl apply -f - <<EOF
           apiVersion: batch/v1
@@ -141,11 +130,6 @@ jobs:
                   service: ${SERVICE}
               spec:
                 restartPolicy: Never
-                tolerations:
-                - key: node.kubernetes.io/not-ready
-                  operator: Exists
-                  effect: NoExecute
-                  tolerationSeconds: 300
                 containers:
                 - name: migration
                   image: ${SERVICE}-service:migration-test
@@ -195,27 +179,26 @@ jobs:
           
           echo "Monitoring migration job for $SERVICE service"
           
-    
+       
           kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }}
           
-         
+        
           for i in {1..10}; do
             echo "=== Minute $i - Checking job status ==="
             
            
             kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }}
             
-           
+            
             echo "Current pod logs:"
             kubectl logs -l service=${SERVICE} -n ${{ env.NAMESPACE }} --tail=20 || echo "No logs yet"
             
-            
+           
             if kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }} -o jsonpath='{.items[0].status.conditions[?(@.type=="Complete")].status}' | grep -q "True"; then
               echo "Migration completed successfully!"
               break
             fi
             
-          
             if kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }} -o jsonpath='{.items[0].status.conditions[?(@.type=="Failed")].status}' | grep -q "True"; then
               echo "Migration failed!"
               kubectl describe job -l service=${SERVICE} -n ${{ env.NAMESPACE }}
@@ -227,7 +210,7 @@ jobs:
             sleep 60
           done
           
-        
+          
           echo "Migration timed out after 10 minutes"
           echo "Final job description:"
           kubectl describe job -l service=${SERVICE} -n ${{ env.NAMESPACE }}
