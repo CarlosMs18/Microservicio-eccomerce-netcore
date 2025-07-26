@@ -210,6 +210,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "monitoring", "monitoring", 
 		k8s\overlays\production\monitoring\kustomization.yaml = k8s\overlays\production\monitoring\kustomization.yaml
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "network-policies", "network-policies", "{AC2444B9-6EF2-475D-8B34-0355135E2F50}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\development\network-policies\sql-connection-patch.yaml = k8s\overlays\development\network-policies\sql-connection-patch.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "network-policies", "network-policies", "{723FB16C-CB7A-408F-9B30-980096E25409}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\overlays\production\network-policies\sql-connection-patch.yaml = k8s\overlays\production\network-policies\sql-connection-patch.yaml
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -349,6 +359,8 @@ Global
 		{837296EE-DD1C-43C8-9621-8CC6491B40FA} = {0072CF27-078C-477F-81BE-CF4AD59B9261}
 		{DFEDB4FD-E103-40DC-8775-ABCF5E0875FF} = {837296EE-DD1C-43C8-9621-8CC6491B40FA}
 		{16B58B83-1C33-402C-8E58-FA8C0796D213} = {0072CF27-078C-477F-81BE-CF4AD59B9261}
+		{AC2444B9-6EF2-475D-8B34-0355135E2F50} = {06E9484A-17C7-43A0-AD6D-8DF18C02F4ED}
+		{723FB16C-CB7A-408F-9B30-980096E25409} = {0072CF27-078C-477F-81BE-CF4AD59B9261}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}
