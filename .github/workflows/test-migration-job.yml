@@ -27,6 +27,7 @@ env:
 jobs:
   test-migration:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,13 +50,20 @@ jobs:
         uses: helm/kind-action@v1.10.0
         with:
           cluster_name: ${{ env.CLUSTER_NAME }}
-          config: infra/kind/kind-config.yaml
+          wait: 300s
           
       - name: Wait for cluster to be ready
         run: |
           echo "Waiting for cluster to be ready..."
           kubectl cluster-info --context kind-${{ env.CLUSTER_NAME }}
-          kubectl get nodes --context kind-${{ env.CLUSTER_NAME }}
+          
+          echo "Waiting for node to be Ready (increased timeout)..."
+          kubectl wait --for=condition=Ready nodes --all --timeout=600s
+          
+          echo "Waiting for system pods..."
+          kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s
+          
+          kubectl get nodes -o wide
           
       - name: Setup kubectl context
         run: |
@@ -98,8 +106,18 @@ jobs:
             echo "Loading image to Kind cluster..."
             kind load docker-image user-service:migration-test --name ${{ env.CLUSTER_NAME }}
             
-         
-            docker exec -it ${{ env.CLUSTER_NAME }}-control-plane crictl images | grep user-service || echo "Image not found in cluster"
+            echo "Verifying image was loaded..."
+            docker exec ${{ env.CLUSTER_NAME }}-control-plane crictl images | grep user-service || echo "Image not found in cluster"
+          elif [[ "$SERVICE" == "cart" ]]; then
+            echo "Building Cart service..."
+            dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
+            docker build -t cart-service:migration-test -f src/Cart/Cart.WebAPI/Dockerfile .
+            kind load docker-image cart-service:migration-test --name ${{ env.CLUSTER_NAME }}
+          elif [[ "$SERVICE" == "catalog" ]]; then
+            echo "Building Catalog service..."
+            dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/Catalog.WebApi/publish
+            docker build -t catalog-service:migration-test -f src/Catalog/Catalog.WebApi/Dockerfile .
+            kind load docker-image catalog-service:migration-test --name ${{ env.CLUSTER_NAME }}
           fi
           
           echo "$SERVICE service image loaded successfully"
@@ -123,6 +141,7 @@ jobs:
           spec:
             ttlSecondsAfterFinished: 600
             backoffLimit: 2
+            activeDeadlineSeconds: 600
             template:
               metadata:
                 labels:
@@ -151,7 +170,7 @@ jobs:
                     dotnet ef --version
                     
                     echo "Testing database connection"
-                    dotnet ef dbcontext info --verbose --no-build || echo "Context info failed"
+                    dotnet ef dbcontext info --verbose --no-build || echo "Context info failed - continuing anyway"
                     
                     echo "Running Entity Framework migrations"
                     dotnet ef database update --verbose --no-build
@@ -163,7 +182,7 @@ jobs:
                   - name: ASPNETCORE_URLS
                     value: "http://+:80"
                   - name: ConnectionStrings__DefaultConnection
-                    value: "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;Persist Security Info=False;User ID=sqladmin;Password=Admin123!;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+                    value: "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;Persist Security Info=False;User ID=sqladmin;Password=Admin123;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
                   resources:
                     requests:
                       memory: "256Mi"
@@ -179,22 +198,33 @@ jobs:
           
           echo "Monitoring migration job for $SERVICE service"
           
-     
-          kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }}
-          
-        
+    
           kubectl wait --for=condition=complete job -l service=${SERVICE} -n ${{ env.NAMESPACE }} --timeout=600s || {
-            echo "Migration job failed or timed out"
-            echo "Job description:"
+            echo "Job failed or timed out, getting details..."
+            
+            echo "=== Job Status ==="
+            kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }} -o wide
+            
+            echo "=== Job Description ==="
             kubectl describe job -l service=${SERVICE} -n ${{ env.NAMESPACE }}
-            echo "Pod logs:"
-            kubectl logs -l service=${SERVICE} -n ${{ env.NAMESPACE }} --tail=100
-            echo "Pod description:"
-            kubectl describe pods -l service=${SERVICE} -n ${{ env.NAMESPACE }}
-            exit 1
+            
+            echo "=== Pod Logs ==="
+            kubectl logs -l service=${SERVICE} -n ${{ env.NAMESPACE }} --tail=100 || echo "No logs available"
+            
+            echo "=== Pod Description ==="
+            kubectl describe pods -l service=${SERVICE} -n ${{ env.NAMESPACE }} || echo "No pods found"
+            
+   
+            if kubectl get jobs -l service=${SERVICE} -n ${{ env.NAMESPACE }} -o jsonpath='{.items[0].status.conditions[?(@.type=="Failed")].status}' | grep -q "True"; then
+              echo "Migration job FAILED!"
+              exit 1
+            else
+              echo "Migration job TIMED OUT!"
+              exit 1
+            fi
           }
           
-          echo "Migration completed successfully for $SERVICE service"
+          echo "Migration completed successfully!"
           
       - name: Verify migration results
         run: |
