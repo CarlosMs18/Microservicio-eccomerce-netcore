@@ -34,7 +34,7 @@ namespace User.Infrastructure.Configuration
             var parameters = new Dictionary<string, string>
             {
                 ["server"] = connectionParams["server"] ?? throw new InvalidOperationException("Server no configurado para Production"),
-                ["database"] = config["User:DatabaseName"] ?? "microservices-db", // ← BD de producción
+                ["database"] = config["User:DatabaseName"] ?? "UserDB", // ← BD de producción
                 ["user"] = connectionParams["user"] ?? "sa",
                 ["password"] = dbPassword,
                 ["trust"] = connectionParams["trust"] ?? "true",
@@ -45,6 +45,7 @@ namespace User.Infrastructure.Configuration
                 ["connectionTimeout"] = poolingParams["connectionTimeout"] ?? "30",
                 ["commandTimeout"] = poolingParams["commandTimeout"] ?? "45"
             };
+
 
             var connectionString = BuildConnectionString(template, parameters);
 
