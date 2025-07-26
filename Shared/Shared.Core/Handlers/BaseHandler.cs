@@ -44,12 +44,11 @@ namespace Shared.Core.Handlers
                     Console.WriteLine($"Testing UserId desde Claims: {testUserId}");
                     return testUserId;
 
-                case "Production":
                 case "Kubernetes":
-                    // ✅ PRODUCTION/KUBERNETES: Ambos usan headers del Ingress (nginx + calico)
-                    var prodUserId = context.Request.Headers["x-user-id"].ToString();
-                    Console.WriteLine($"{environment} UserId desde Headers: {prodUserId}");
-                    return prodUserId;
+                    // ✅ KUBERNETES: Leer desde headers del Ingress
+                    var kubeUserId = context.Request.Headers["x-user-id"].ToString();
+                    Console.WriteLine($"Kubernetes UserId desde Headers: {kubeUserId}");
+                    return kubeUserId;
 
                 default: // Development/Docker
                     // ✅ DEVELOPMENT/DOCKER: Leer desde Claims (middleware)
@@ -78,9 +77,8 @@ namespace Shared.Core.Handlers
                     // ✅ TESTING: Leer desde Claims
                     return context.User?.FindFirst(ClaimTypes.Email)?.Value;
 
-                case "Production":
                 case "Kubernetes":
-                    // ✅ PRODUCTION/KUBERNETES: Ambos usan headers del Ingress
+                    // ✅ KUBERNETES: Leer desde headers del Ingress
                     return context.Request.Headers["x-user-email"].ToString();
 
                 default: // Development/Docker
@@ -110,9 +108,8 @@ namespace Shared.Core.Handlers
                     return context.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value).ToList()
                            ?? new List<string>();
 
-                case "Production":
                 case "Kubernetes":
-                    // ✅ PRODUCTION/KUBERNETES: Ambos usan headers del Ingress
+                    // ✅ KUBERNETES: Leer desde headers del Ingress
                     var rolesHeader = context.Request.Headers["x-user-roles"].ToString();
                     return string.IsNullOrEmpty(rolesHeader)
                         ? new List<string>()
@@ -127,21 +124,19 @@ namespace Shared.Core.Handlers
             }
         }
 
-        // Método helper para detectar entorno (IGUAL QUE EN PROGRAM.CS)
+        // Método helper para detectar entorno (actualizado para incluir CI)
         private string DetectEnvironment()
         {
-            // 🔥 PRIORIDAD: ASPNETCORE_ENVIRONMENT tiene la máxima prioridad
-            var aspnetEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-            if (!string.IsNullOrEmpty(aspnetEnv))
-            {
-                return aspnetEnv;
-            }
-
-            // Fallbacks para otros entornos
+            // 🆕 PRIORIDAD 1: Detectar CI primero
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
                 return "CI";
+
+            var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            if (env == "Testing") return "Testing";
+
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
                 return "Kubernetes";
+
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
                 return "Docker";
 
