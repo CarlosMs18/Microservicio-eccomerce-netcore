@@ -1,0 +1,245 @@
+name: Test Migration Job
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to test migration (user/cart/catalog)'
+        required: true
+        default: 'user'
+        type: choice
+        options:
+        - user
+        - cart
+        - catalog
+
+jobs:
+  test-migration:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+          
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: migration-test
+          config: infra/kind/kind-config.yaml
+          
+      - name: Wait for cluster to be ready
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+          
+      - name: Create local storage class
+        run: |
+          kubectl apply -f - <<EOF
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: local-storage
+            annotations:
+              storageclass.kubernetes.io/is-default-class: "true"
+          provisioner: rancher.io/local-path
+          volumeBindingMode: WaitForFirstConsumer
+          reclaimPolicy: Delete
+          EOF
+          
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        
+      - name: Create test namespace
+        run: |
+          kubectl create namespace migration-test
+          kubectl config set-context --current --namespace=migration-test
+          
+      - name: Test Azure SQL Connection
+        run: |
+          echo "Testing connectivity to Azure SQL Database..."
+          echo "Target: microservices-sql-server.database.windows.net"
+          
+          nslookup microservices-sql-server.database.windows.net || echo "DNS resolution failed"
+          ping -c 3 microservices-sql-server.database.windows.net || echo "Ping failed (normal for Azure SQL)"
+          
+          echo "Ready to test migration with Azure SQL Database"
+          
+      - name: Build Service Image
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          echo "Building $SERVICE service for migration testing..."
+          
+          case $SERVICE in
+            user)
+              echo "Building User service..."
+              dotnet publish src/User/User.WebAPI/User.WebAPI.csproj -c Release -o src/User/User.WebAPI/publish
+              docker build -t ${SERVICE}-service:migration-test -f src/User/User.WebAPI/Dockerfile .
+              ;;
+            cart)
+              echo "Building Cart service..."
+              dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
+              docker build -t ${SERVICE}-service:migration-test -f src/Cart/Cart.WebAPI/Dockerfile .
+              ;;
+            catalog)
+              echo "Building Catalog service..."
+              dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
+              docker build -t ${SERVICE}-service:migration-test -f src/Catalog/Catalog.WebApi/Dockerfile .
+              ;;
+          esac
+          
+          kind load docker-image ${SERVICE}-service:migration-test --name migration-test
+          echo "$SERVICE service image loaded successfully!"
+          
+      - name: Create Migration Job
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          CONNECTION_STRING="Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=microservices-db;Persist Security Info=False;User ID=sqladmin;Password=Admin123;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+          
+          echo "Creating migration job for $SERVICE service..."
+          kubectl apply -f - <<EOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${SERVICE}-migration-job
+            namespace: migration-test
+            labels:
+              app: ${SERVICE}-migration
+              job-type: database-migration
+          spec:
+            ttlSecondsAfterFinished: 600
+            backoffLimit: 3
+            template:
+              metadata:
+                labels:
+                  app: ${SERVICE}-migration
+              spec:
+                restartPolicy: Never
+                containers:
+                - name: migration
+                  image: ${SERVICE}-service:migration-test
+                  command: 
+                  - /bin/sh
+                  - -c
+                  - |
+                    echo "Starting database migration for $SERVICE service..."
+                    echo "Target: Azure SQL Database (microservices-sql-server.database.windows.net)"
+                    echo "Database: microservices-db"
+                    echo "Waiting for network connectivity..."
+                    sleep 10
+                    echo "Running Entity Framework migrations..."
+                    dotnet ef database update --verbose
+                    echo "Migration completed successfully!"
+                  env:
+                  - name: ASPNETCORE_ENVIRONMENT
+                    value: "Development"
+                  - name: ConnectionStrings__DefaultConnection
+                    value: "$CONNECTION_STRING"
+                  resources:
+                    requests:
+                      memory: "256Mi"
+                      cpu: "100m"
+                    limits:
+                      memory: "512Mi"
+                      cpu: "500m"
+          EOF
+          
+          echo "Migration job created for $SERVICE service!"
+          
+      - name: Monitor Migration Job
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          JOB_NAME="${SERVICE}-migration-job"
+          
+          echo "Monitoring migration job: $JOB_NAME"
+          echo "=================================="
+          
+          kubectl get job $JOB_NAME -n migration-test
+          
+          echo "Waiting for migration job to complete..."
+          kubectl wait --for=condition=complete job/$JOB_NAME -n migration-test --timeout=300s || {
+            echo "Job didn't complete in time, checking status..."
+            kubectl describe job $JOB_NAME -n migration-test
+            exit 1
+          }
+          
+          echo "Migration job completed successfully!"
+          
+      - name: Check Migration Results
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          JOB_NAME="${SERVICE}-migration-job"
+          
+          echo "Migration Results Summary"
+          echo "========================="
+          
+          kubectl get job $JOB_NAME -n migration-test -o wide
+          
+          echo -e "\nPod Details:"
+          kubectl get pods -l app=${SERVICE}-migration -n migration-test
+          
+          echo -e "\nMigration Logs:"
+          kubectl logs -l app=${SERVICE}-migration -n migration-test --tail=50
+          
+          echo -e "\nTesting Azure SQL Database Connection:"
+          kubectl run test-azure-connection --rm -i --restart=Never \
+            --image=mcr.microsoft.com/mssql-tools \
+            --namespace=migration-test \
+            -- /opt/mssql-tools/bin/sqlcmd \
+            -S microservices-sql-server.database.windows.net \
+            -U sqladmin \
+            -P 'Admin123' \
+            -d microservices-db \
+            -Q "SELECT DB_NAME() as CurrentDatabase, GETDATE() as CurrentTime;" || echo "Azure database connection test failed"
+          
+      - name: Debug Information
+        if: failure()
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          JOB_NAME="${SERVICE}-migration-job"
+          
+          echo "Debug Information"
+          echo "===================="
+          
+          echo -e "\nCluster Status:"
+          kubectl get nodes
+          kubectl get pods --all-namespaces
+          
+          echo -e "\nFailed Job Details:"
+          kubectl describe job $JOB_NAME -n migration-test || echo "Job not found"
+          
+          echo -e "\nAll Pod Logs:"
+          kubectl logs -l app=${SERVICE}-migration -n migration-test --previous --tail=100 || echo "No previous logs"
+          kubectl logs -l app=${SERVICE}-migration -n migration-test --tail=100 || echo "No current logs"
+          
+          echo -e "\nAzure SQL Server Status:"
+          echo "Target Database: microservices-sql-server.database.windows.net"
+          echo "Database Name: microservices-db"
+          echo "Connection Test: Performed above"
+          
+          echo -e "\nEvents:"
+          kubectl get events -n migration-test --sort-by=.metadata.creationTimestamp
+          
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Cleaning up test environment..."
+          kind delete cluster --name migration-test
+          echo "Cleanup completed!"
+          
+      - name: Test Summary
+        if: success()
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          echo "Migration Test Summary"
+          echo "========================="
+          echo "Service: $SERVICE"
+          echo "Migration Job: Created and executed successfully"
+          echo "Database: Migration completed"
+          echo "Logs: Available for review"
+          echo ""
+          echo "Ready for integration into main pipeline!"
