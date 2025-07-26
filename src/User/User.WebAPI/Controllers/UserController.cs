@@ -1,14 +1,14 @@
-﻿using MediatR;
-
+﻿using Azure.Core;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
-
+using Microsoft.IdentityModel.Tokens;
 using Shared.Core.Dtos;
 using Shared.Core.Interfaces;
 using Shared.Infrastructure.Interfaces;
 using System.Diagnostics;
-
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
-
+using System.Security.Claims;
 using User.Application.DTOs.Requests;
 using User.Application.Features.Users.Commands;
 
@@ -97,7 +97,7 @@ namespace User.WebAPI.Controllers
 
             Console.WriteLine("LLAMANDO CONTROLADOR DE USER VALIDATE TOKEN HTTP!!");
 
-            // ✅ DETECCIÓN MEJORADA: Production y Kubernetes usan Ingress
+            // ✅ DETECCIÓN SIMPLE: Solo Production y Kubernetes usan Ingress
             var isIngressEnvironment = IsIngressEnvironment();
 
             try
@@ -139,8 +139,7 @@ namespace User.WebAPI.Controllers
                         : "";
                     Response.Headers.Add("x-user-roles", rolesString);
 
-                    var environment = DetectEnvironment();
-                    Console.WriteLine($"🔐 Headers inyectados para Ingress [{environment}] - UserId: {result.UserId}, Email: {result.Email}, Roles: {rolesString}");
+                    Console.WriteLine($"🔐 Headers inyectados para Ingress - UserId: {result.UserId}, Email: {result.Email}, Roles: {rolesString}");
 
                     return Ok(new { success = true, message = "Token valid" });
                 }
@@ -190,7 +189,6 @@ namespace User.WebAPI.Controllers
             }
         }
 
-
         /// <summary>
         /// Crea una respuesta de error estandarizada compatible con el formato esperado por el Ingress
         /// </summary>
@@ -212,31 +210,18 @@ namespace User.WebAPI.Controllers
 
         /// <summary>
         /// Detecta si estamos en un entorno que usa Ingress (Production o Kubernetes)
+        /// ✅ SIMPLE Y DIRECTO: Solo dos casos específicos
         /// </summary>
         private bool IsIngressEnvironment()
         {
-            var environment = DetectEnvironment();
-            return environment == "Production" || environment == "Kubernetes";
-        }
-
-        private string DetectEnvironment()
-        {
-            // 🔥 PRIORIDAD: ASPNETCORE_ENVIRONMENT tiene la máxima prioridad
+            // Production: ASPNETCORE_ENVIRONMENT=Production
             var aspnetEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-            if (!string.IsNullOrEmpty(aspnetEnv))
-            {
-                return aspnetEnv;
-            }
+            if (aspnetEnv == "Production")
+                return true;
 
-            // Fallbacks para otros entornos
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
-                return "CI";
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
-                return "Kubernetes";
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER")))
-                return "Docker";
-
-            return "Development";
+            // Kubernetes: detectar por variable específica
+            var isKubernetes = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"));
+            return isKubernetes;
         }
     }
 }
