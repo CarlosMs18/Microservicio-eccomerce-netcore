@@ -1,0 +1,103 @@
+name: Test User Migration
+
+on:
+  push:
+    branches:
+      - rama-test-migration
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '7.0.x'
+
+jobs:
+  test-user-migration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          
+      - name: Install EF Tools
+        run: |
+          dotnet tool install --global dotnet-ef --version 7.0.*
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+          
+      - name: Test Database Connection
+        run: |
+          echo "Testing database connection"
+          mkdir temp-test
+          cd temp-test
+          dotnet new console
+          dotnet add package System.Data.SqlClient
+          cat > Program.cs << 'EOF'
+          using System;
+          using System.Data.SqlClient;
+          
+          try 
+          {
+              var conn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+              using var connection = new SqlConnection(conn);
+              connection.Open();
+              Console.WriteLine("Connection successful");
+              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+              var count = cmd.ExecuteScalar();
+              Console.WriteLine($"Tables found: {count}");
+          }
+          catch(Exception ex)
+          {
+              Console.WriteLine($"Connection failed: {ex.Message}");
+              Environment.Exit(1);
+          }
+          EOF
+          dotnet run
+          cd ..
+          
+      - name: Build User Service
+        run: |
+          echo "Building User service"
+          cd src/User/User.WebAPI
+          dotnet build --configuration Release
+          
+      - name: Check Migrations
+        run: |
+          echo "Checking migrations"
+          cd src/User/User.WebAPI
+          export DB_SERVER="microservices-sql-server.database.windows.net"
+          export DB_NAME="UserDB"
+          export DB_USER="sqladmin"
+          export DB_PASSWORD="Admin123!"
+          export ASPNETCORE_ENVIRONMENT="Production"
+          echo "Database variables configured"
+          echo "Available migrations:"
+          dotnet ef migrations list --configuration Release || echo "No migrations found"
+          
+      - name: Apply Migrations
+        run: |
+          echo "Applying migrations"
+          cd src/User/User.WebAPI
+          export DB_SERVER="microservices-sql-server.database.windows.net"
+          export DB_NAME="UserDB"
+          export DB_USER="sqladmin"
+          export DB_PASSWORD="Admin123!"
+          export ASPNETCORE_ENVIRONMENT="Production"
+          echo "Setting up database environment variables"
+          dotnet clean
+          dotnet build --configuration Release
+          dotnet ef database update --configuration Release --verbose
+          echo "Migrations applied successfully"
+          
+      - name: Verify Results
+        run: |
+          echo "Verifying results"
+          cd src/User/User.WebAPI
+          export DB_SERVER="microservices-sql-server.database.windows.net"
+          export DB_NAME="UserDB"
+          export DB_USER="sqladmin"
+          export DB_PASSWORD="Admin123!"
+          export ASPNETCORE_ENVIRONMENT="Production"
+          dotnet ef migrations list --configuration Release
+          echo "Test completed"
