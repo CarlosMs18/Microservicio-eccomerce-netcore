@@ -26,7 +26,7 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // 1. Configuración básica
-    var environment = DetectEnvironment();
+    var environment = DetectEnvironment(args); // 🔥 PASAR args como parámetro
 
     ConfigureAppSettings(builder, environment);
     ConfigureSerilog(builder, environment);
@@ -109,8 +109,17 @@ static async Task SeedMasterDataAsync(IServiceProvider services, string environm
     }
 }
 
-static string DetectEnvironment()
+// 🔥 FUNCIÓN CORREGIDA: Ahora recibe args como parámetro
+static string DetectEnvironment(string[] args)
 {
+    // 🔥 NUEVA PRIORIDAD: Argumentos de línea de comandos
+    var envArg = args.FirstOrDefault(a => a.StartsWith("--environment="))?.Split('=')[1];
+    if (!string.IsNullOrEmpty(envArg))
+    {
+        Log.Information("🎯 Usando environment desde argumentos: {Environment}", envArg);
+        return envArg;
+    }
+
     // 🔥 PRIORIDAD: ASPNETCORE_ENVIRONMENT tiene la máxima prioridad
     var aspnetEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
     if (!string.IsNullOrEmpty(aspnetEnv))
@@ -130,6 +139,7 @@ static string DetectEnvironment()
     return "Development";
 }
 
+// Resto de las funciones sin cambios...
 static void ConfigureAppSettings(WebApplicationBuilder builder, string environment)
 {
     Log.Information("🔧 Entorno detectado: {Environment}", environment);

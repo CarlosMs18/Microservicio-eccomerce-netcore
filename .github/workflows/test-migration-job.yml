@@ -106,26 +106,19 @@ jobs:
 
       - name: Seed Master Data  
         run: |
-          echo "=== SEEDING MASTER DATA - FORCING PRODUCTION ==="
+          echo "=== SEEDING CON ARGUMENTOS ==="
           cd src/User/User.WebAPI
           
-       
-          echo "Current working directory: $(pwd)"
-          echo "Files in directory:"
-          ls -la
-          
-          echo ""
-          echo "=== FORZANDO VARIABLES DE ENTORNO ==="
+      
+          export DB_SERVER="microservices-sql-server.database.windows.net"
+          export DB_NAME="UserDB"
+          export DB_USER="sqladmin"
+          export DB_PASSWORD="Admin123!"
           
        
-          env ASPNETCORE_ENVIRONMENT=Production \
-              DB_SERVER="microservices-sql-server.database.windows.net" \
-              DB_NAME="UserDB" \
-              DB_USER="sqladmin" \
-              DB_PASSWORD="Admin123!" \
-              dotnet run --configuration Release --seed-data
+          dotnet run --configuration Release --seed-data --environment=Production
           
-          echo "Seeding process completed"
+          echo " Seeding process completed"
           
       - name: Verify Results
         run: |
