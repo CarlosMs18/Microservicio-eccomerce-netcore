@@ -14,6 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ASPNETCORE_ENVIRONMENT: "Production"
+      DB_SERVER: "microservices-sql-server.database.windows.net"
+      DB_NAME: "UserDB"
+      DB_USER: "sqladmin"
+      DB_PASSWORD: "Admin123!"
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,61 +65,49 @@ jobs:
           
       - name: Build User Service
         run: |
-          echo "Building User service"
+          echo "Building User service for Production"
           cd src/User/User.WebAPI
           dotnet build --configuration Release
           
       - name: Check Migrations
-        env:
-          DB_SERVER: "microservices-sql-server.database.windows.net"
-          DB_NAME: "UserDB"
-          DB_USER: "sqladmin"
-          DB_PASSWORD: "Admin123!"
-          ASPNETCORE_ENVIRONMENT: "Production"
         run: |
-          echo "Checking migrations"
+          echo "Checking migrations for Production environment"
           cd src/User/User.WebAPI
-          echo "Database variables configured for Production environment"
+          echo "=== ENVIRONMENT CHECK ==="
+          echo "ASPNETCORE_ENVIRONMENT: $ASPNETCORE_ENVIRONMENT"
+          echo "DB_SERVER: $DB_SERVER"
+          echo "========================="
           echo "Available migrations:"
           dotnet ef migrations list --configuration Release || echo "No migrations found"
           
       - name: Apply Migrations
-        env:
-          DB_SERVER: "microservices-sql-server.database.windows.net"
-          DB_NAME: "UserDB"
-          DB_USER: "sqladmin"
-          DB_PASSWORD: "Admin123!"
-          ASPNETCORE_ENVIRONMENT: "Production"
         run: |
-          echo "Applying migrations in Production environment"
+          echo "Applying migrations for Production environment"
           cd src/User/User.WebAPI
-          echo "Setting up database environment variables"
+          echo "=== ENVIRONMENT CHECK ==="
+          echo "ASPNETCORE_ENVIRONMENT: $ASPNETCORE_ENVIRONMENT"
+          echo "========================="
           dotnet clean
           dotnet build --configuration Release
           dotnet ef database update --configuration Release --verbose
           echo "Migrations applied successfully"
 
       - name: Seed Master Data  
-        env:
-          DB_SERVER: "microservices-sql-server.database.windows.net"
-          DB_NAME: "UserDB"
-          DB_USER: "sqladmin"
-          DB_PASSWORD: "Admin123!"
-          ASPNETCORE_ENVIRONMENT: "Production"
         run: |
           echo "Seeding master data for Production environment"
           cd src/User/User.WebAPI
+          
+          echo "=== FINAL ENVIRONMENT CHECK ==="
+          echo "ASPNETCORE_ENVIRONMENT: $ASPNETCORE_ENVIRONMENT"
+          echo "DB_SERVER: $DB_SERVER"
+          echo "DB_NAME: $DB_NAME"
+          echo "==============================="
+          
           dotnet run --configuration Release --seed-data
           
       - name: Verify Results
-        env:
-          DB_SERVER: "microservices-sql-server.database.windows.net"
-          DB_NAME: "UserDB"
-          DB_USER: "sqladmin"
-          DB_PASSWORD: "Admin123!"
-          ASPNETCORE_ENVIRONMENT: "Production"
         run: |
-          echo "Verifying results in Production environment"
+          echo "Verifying results for Production environment"
           cd src/User/User.WebAPI
           dotnet ef migrations list --configuration Release
-          echo "Test completed"
+          echo "Test completed successfully"
