@@ -12,6 +12,8 @@ env:
 jobs:
   test-user-migration:
     runs-on: ubuntu-latest
+    env:
+      ASPNETCORE_ENVIRONMENT: "Production"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
