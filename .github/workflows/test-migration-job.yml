@@ -1,4 +1,4 @@
-name: Test User Migration
+name: Test User & Catalog Migration
 
 on:
   push:
@@ -10,7 +10,7 @@ env:
   DOTNET_VERSION: '7.0.x'
 
 jobs:
-  test-user-migration:
+  test-migration:
     runs-on: ubuntu-latest
     
     steps:
@@ -27,33 +27,75 @@ jobs:
           dotnet tool install --global dotnet-ef --version 7.0.*
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
           
-      - name: Test Database Connection
+      - name: Test Database Connections
         run: |
-          echo "Testing database connection"
+          echo "Testing database connections"
           mkdir temp-test
           cd temp-test
           dotnet new console
           dotnet add package System.Data.SqlClient
-          cat > Program.cs << 'EOF'
+          
+          cat > TestUserDB.cs << 'EOF'
           using System;
           using System.Data.SqlClient;
           
-          try 
+          public static class TestUserDB 
           {
-              var conn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-              using var connection = new SqlConnection(conn);
-              connection.Open();
-              Console.WriteLine("Connection successful");
-              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
-              var count = cmd.ExecuteScalar();
-              Console.WriteLine($"Tables found: {count}");
-          }
-          catch(Exception ex)
-          {
-              Console.WriteLine($"Connection failed: {ex.Message}");
-              Environment.Exit(1);
+              public static void Test()
+              {
+                  try 
+                  {
+                      var conn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+                      using var connection = new SqlConnection(conn);
+                      connection.Open();
+                      Console.WriteLine("UserDB Connection successful");
+                      using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+                      var count = cmd.ExecuteScalar();
+                      Console.WriteLine($"UserDB Tables found: {count}");
+                  }
+                  catch(Exception ex)
+                  {
+                      Console.WriteLine($"UserDB Connection failed: {ex.Message}");
+                      throw;
+                  }
+              }
           }
           EOF
+          
+          cat > TestCatalogDB.cs << 'EOF'
+          using System;
+          using System.Data.SqlClient;
+          
+          public static class TestCatalogDB 
+          {
+              public static void Test()
+              {
+                  try 
+                  {
+                      var conn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CatalogDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+                      using var connection = new SqlConnection(conn);
+                      connection.Open();
+                      Console.WriteLine("CatalogDB Connection successful");
+                      using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+                      var count = cmd.ExecuteScalar();
+                      Console.WriteLine($"CatalogDB Tables found: {count}");
+                  }
+                  catch(Exception ex)
+                  {
+                      Console.WriteLine($"CatalogDB Connection failed: {ex.Message}");
+                      throw;
+                  }
+              }
+          }
+          EOF
+          
+          cat > Program.cs << 'EOF'
+          Console.WriteLine("=== TESTING DATABASE CONNECTIONS ===");
+          TestUserDB.Test();
+          TestCatalogDB.Test();
+          Console.WriteLine("=== ALL CONNECTIONS OK ===");
+          EOF
+          
           dotnet run
           cd ..
           
@@ -63,38 +105,26 @@ jobs:
           cd src/User/User.WebAPI
           dotnet build --configuration Release
           
-      - name: DEBUG - Check Environment Variables
+      - name: Check User Migrations
         run: |
-          echo "=== DEBUGGING ENVIRONMENT VARIABLES ==="
-          echo "Current environment variables:"
-          env | grep -E "(ASPNET|DB_)" || echo "No matching env vars found"
-          echo ""
-          echo "Checking specific variables:"
-          echo "ASPNETCORE_ENVIRONMENT = '$ASPNETCORE_ENVIRONMENT'"
-          echo "========================================"
-          
-      - name: Check Migrations
-        run: |
-          echo "Checking migrations with forced Production environment"
+          echo "Checking User migrations"
           cd src/User/User.WebAPI
           
-      
           env ASPNETCORE_ENVIRONMENT=Production \
               DB_SERVER="microservices-sql-server.database.windows.net" \
               DB_NAME="UserDB" \
               DB_USER="sqladmin" \
               DB_PASSWORD="Admin123!" \
-              dotnet ef migrations list --configuration Release || echo "No migrations found"
+              dotnet ef migrations list --configuration Release || echo "No User migrations found"
           
-      - name: Apply Migrations
+      - name: Apply User Migrations
         run: |
-          echo "Applying migrations with forced Production environment"
+          echo "Applying User migrations"
           cd src/User/User.WebAPI
           
           dotnet clean
           dotnet build --configuration Release
           
-      
           env ASPNETCORE_ENVIRONMENT=Production \
               DB_SERVER="microservices-sql-server.database.windows.net" \
               DB_NAME="UserDB" \
@@ -102,30 +132,63 @@ jobs:
               DB_PASSWORD="Admin123!" \
               dotnet ef database update --configuration Release --verbose
           
-          echo "Migrations applied successfully"
+          echo "User migrations applied successfully"
 
-      - name: Seed Master Data  
+      - name: Seed User Master Data  
         run: |
-          echo "=== SEEDING CON ARGUMENTOS ==="
+          echo "Seeding User master data"
           cd src/User/User.WebAPI
           
-      
           export DB_SERVER="microservices-sql-server.database.windows.net"
           export DB_NAME="UserDB"
           export DB_USER="sqladmin"
           export DB_PASSWORD="Admin123!"
           
-       
           dotnet run --configuration Release --seed-data --environment=Production
           
-          echo " Seeding process completed"
-          
-      - name: Verify Results
+          echo "User seeding completed"
+
+      - name: Build Catalog Service
         run: |
-          echo "Verifying results with Production environment"
-          cd src/User/User.WebAPI
+          echo "Building Catalog service for Production"
+          cd src/Catalog/Catalog.WebAPI
+          dotnet build --configuration Release
           
-        
+      - name: Check Catalog Migrations
+        run: |
+          echo "Checking Catalog migrations"
+          cd src/Catalog/Catalog.WebAPI
+          
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CatalogDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef migrations list --configuration Release || echo "No Catalog migrations found"
+          
+      - name: Apply Catalog Migrations
+        run: |
+          echo "Applying Catalog migrations"
+          cd src/Catalog/Catalog.WebAPI
+          
+          dotnet clean
+          dotnet build --configuration Release
+          
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CatalogDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef database update --configuration Release --verbose
+          
+          echo "Catalog migrations applied successfully"
+          
+      - name: Verify All Results
+        run: |
+          echo "Verifying all migration results"
+          
+          echo "=== USER MIGRATIONS ==="
+          cd src/User/User.WebAPI
           env ASPNETCORE_ENVIRONMENT=Production \
               DB_SERVER="microservices-sql-server.database.windows.net" \
               DB_NAME="UserDB" \
@@ -133,4 +196,15 @@ jobs:
               DB_PASSWORD="Admin123!" \
               dotnet ef migrations list --configuration Release
           
-          echo " Test completed successfully"
+          echo ""
+          echo "=== CATALOG MIGRATIONS ==="
+          cd ../../../src/Catalog/Catalog.WebAPI
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CatalogDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef migrations list --configuration Release
+          
+          echo ""
+          echo "ALL MIGRATIONS COMPLETED SUCCESSFULLY"
