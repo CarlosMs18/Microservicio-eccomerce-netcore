@@ -21,14 +21,6 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    // 🌱 MANEJO DEL SEED DATA PARA PRODUCTION
-    if (args.Contains("--seed-data"))
-    {
-        Log.Information(" Ejecutando SOLO seeding de datos maestros para Production");
-        await RunSeedDataOnly(args);
-        return;
-    }
-
     Log.Information("👤 Iniciando User Service");
 
     var builder = WebApplication.CreateBuilder(args);
@@ -44,9 +36,19 @@ try
 
     // 3. App pipeline
     var app = builder.Build();
+
+    // 🔥 NUEVO: Verificar si se ejecuta con --seed-data
+    if (args.Contains("--seed-data"))
+    {
+        Log.Information("🌱 Ejecutando seeding de datos maestros...");
+        await SeedMasterDataAsync(app.Services, environment);
+        Log.Information("✅ Seeding completado. Terminando aplicación.");
+        return; // Terminar después del seeding, no iniciar el servidor
+    }
+
     ConfigureMiddleware(app, environment);
 
-    // 4. Inicialización (SOLO para Development/Testing)
+    // 4. Inicialización (solo para entornos de desarrollo)
     await app.Services.EnsureDatabaseAsync(environment);
 
     builder.Configuration.LogEndpointsConfiguration(environment, restPort, grpcPort);
@@ -64,35 +66,41 @@ finally
     Log.CloseAndFlush();
 }
 
-// 🌱 MÉTODO SEPARADO PARA SEED DATA EN PRODUCTION
-static async Task RunSeedDataOnly(string[] args)
+// 🔥 NUEVA FUNCIÓN: Para seeding manual en producción
+static async Task SeedMasterDataAsync(IServiceProvider services, string environment)
 {
-    var builder = WebApplication.CreateBuilder(args);
-
-    // Configuración mínima para seeding
-    var environment = DetectEnvironment();
-    ConfigureAppSettings(builder, environment);
-    ConfigureSerilog(builder, environment);
-
-    // Solo servicios esenciales para seeding
-    builder.Services.AddApplicationServices();
-    builder.Services.AddInfrastructureServices(builder.Configuration, environment);
-
-    var app = builder.Build();
-
-    // Ejecutar SOLO el seeding de master data
-    using var scope = app.Services.CreateScope();
-    var services = scope.ServiceProvider;
+    using var scope = services.CreateScope();
+    var scopedServices = scope.ServiceProvider;
 
     try
     {
-        var context = services.GetRequiredService<UserIdentityDbContext>();
-        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = services.GetRequiredService<RoleManager<ApplicationRole>>();
+        var context = scopedServices.GetRequiredService<UserIdentityDbContext>();
+        var userManager = scopedServices.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scopedServices.GetRequiredService<RoleManager<ApplicationRole>>();
 
-        Log.Information("🎯 Ejecutando MasterDataSeeder para Production");
-        await MasterDataSeeder.SeedAsync(context, userManager, roleManager);
-        Log.Information("✅ Seeding completado exitosamente");
+        Log.Information("🔄 Verificando conexión a base de datos...");
+
+        // Verificar que la BD existe y está migrada
+        if (!await context.Database.CanConnectAsync())
+        {
+            throw new InvalidOperationException("No se puede conectar a la base de datos");
+        }
+
+        Log.Information("✅ Conexión exitosa. Ejecutando seeding...");
+
+        if (environment == "Production")
+        {
+            await MasterDataSeeder.SeedAsync(context, userManager, roleManager);
+        }
+        else
+        {
+            await DbInitializer.InitializeAsync(context, userManager, roleManager);
+        }
+
+        Log.Information("🎉 Seeding ejecutado exitosamente");
+        Log.Information("📊 Estado final - Usuarios: {UserCount}, Roles: {RoleCount}",
+            context.Users.Count(),
+            context.Roles.Count());
     }
     catch (Exception ex)
     {
