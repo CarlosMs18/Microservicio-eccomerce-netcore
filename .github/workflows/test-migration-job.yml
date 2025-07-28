@@ -89,7 +89,7 @@ jobs:
           
       - name: Apply Master Data Seeds
         run: |
-          echo "Applying master data seeds (roles and base data)"
+          echo " Applying master data seeds (roles and base data)"
           cd src/User/User.WebAPI
           export DB_SERVER="microservices-sql-server.database.windows.net"
           export DB_NAME="UserDB"
@@ -97,7 +97,7 @@ jobs:
           export DB_PASSWORD="Admin123!"
           export ASPNETCORE_ENVIRONMENT="Production"
           echo "Seeding master data..."
-          dotnet run --seed-data --configuration Release
+          ASPNETCORE_ENVIRONMENT=Production dotnet run --seed-data --configuration Release
           echo "Master data seeding completed"
           
       - name: Verify Results
