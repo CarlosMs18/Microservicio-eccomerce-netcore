@@ -27,6 +27,18 @@ jobs:
           dotnet tool install --global dotnet-ef --version 7.0.*
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
           
+      - name: List Directory Structure
+        run: |
+          echo "Checking directory structure..."
+          find . -name "*.csproj" -type f | head -20
+          ls -la src/
+          if [ -d "src/Catalog" ]; then
+            ls -la src/Catalog/
+          fi
+          if [ -d "src/User" ]; then
+            ls -la src/User/
+          fi
+          
       - name: Create Databases if Not Exist
         run: |
           echo "Creating databases if they don't exist"
@@ -141,8 +153,14 @@ jobs:
       - name: Build User Service
         run: |
           echo "Building User service for Production"
-          cd src/User/User.WebAPI
-          dotnet build --configuration Release
+          if [ -f "src/User/User.WebAPI/User.WebAPI.csproj" ]; then
+            cd src/User/User.WebAPI
+            dotnet build --configuration Release
+          else
+            echo "User.WebAPI project not found at expected location"
+            find . -name "User.WebAPI.csproj" -type f
+            exit 1
+          fi
           
       - name: Check User Migrations
         run: |
@@ -190,8 +208,17 @@ jobs:
       - name: Build Catalog Service
         run: |
           echo "Building Catalog service for Production"
-          cd src/Catalog/Catalog.WebAPI
-          dotnet build --configuration Release
+          if [ -f "src/Catalog/Catalog.WebAPI/Catalog.WebAPI.csproj" ]; then
+            cd src/Catalog/Catalog.WebAPI
+            dotnet build --configuration Release
+          else
+            echo "Catalog.WebAPI project not found at expected location"
+            echo "Looking for Catalog.WebAPI.csproj..."
+            find . -name "Catalog.WebAPI.csproj" -type f
+            echo "Available directories in src/Catalog:"
+            ls -la src/Catalog/ || echo "src/Catalog directory not found"
+            exit 1
+          fi
           
       - name: Check Catalog Migrations
         run: |
