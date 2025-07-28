@@ -9,6 +9,8 @@ using User.Infrastructure.Persistence;
 using User.Infrastructure.Services.External.Grpc;
 using User.WebAPI.Middlewares;
 using Users.Application;
+using Microsoft.AspNetCore.Identity;
+using User.Application.Models;
 
 // Test comment to trigger workflow v2
 // Bootstrap logger
@@ -19,8 +21,15 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("👤 Iniciando User Service");
+    // 🌱 MANEJO DEL SEED DATA PARA PRODUCTION
+    if (args.Contains("--seed-data"))
+    {
+        Log.Information(" Ejecutando SOLO seeding de datos maestros para Production");
+        await RunSeedDataOnly(args);
+        return;
+    }
 
+    Log.Information("👤 Iniciando User Service");
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -37,7 +46,7 @@ try
     var app = builder.Build();
     ConfigureMiddleware(app, environment);
 
-    // 4. Inicialización
+    // 4. Inicialización (SOLO para Development/Testing)
     await app.Services.EnsureDatabaseAsync(environment);
 
     builder.Configuration.LogEndpointsConfiguration(environment, restPort, grpcPort);
@@ -53,6 +62,43 @@ catch (Exception ex)
 finally
 {
     Log.CloseAndFlush();
+}
+
+// 🌱 MÉTODO SEPARADO PARA SEED DATA EN PRODUCTION
+static async Task RunSeedDataOnly(string[] args)
+{
+    var builder = WebApplication.CreateBuilder(args);
+
+    // Configuración mínima para seeding
+    var environment = DetectEnvironment();
+    ConfigureAppSettings(builder, environment);
+    ConfigureSerilog(builder, environment);
+
+    // Solo servicios esenciales para seeding
+    builder.Services.AddApplicationServices();
+    builder.Services.AddInfrastructureServices(builder.Configuration, environment);
+
+    var app = builder.Build();
+
+    // Ejecutar SOLO el seeding de master data
+    using var scope = app.Services.CreateScope();
+    var services = scope.ServiceProvider;
+
+    try
+    {
+        var context = services.GetRequiredService<UserIdentityDbContext>();
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = services.GetRequiredService<RoleManager<ApplicationRole>>();
+
+        Log.Information("🎯 Ejecutando MasterDataSeeder para Production");
+        await MasterDataSeeder.SeedAsync(context, userManager, roleManager);
+        Log.Information("✅ Seeding completado exitosamente");
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "❌ Error crítico durante el seeding");
+        throw;
+    }
 }
 
 static string DetectEnvironment()

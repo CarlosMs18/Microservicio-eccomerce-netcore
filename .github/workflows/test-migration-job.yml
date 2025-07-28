@@ -1,14 +1,11 @@
 name: Test User Migration
-
 on:
   push:
     branches:
-      - rama-test-migration
+      - rama-catalog-testing-production-migration
   workflow_dispatch:
-
 env:
   DOTNET_VERSION: '7.0.x'
-
 jobs:
   test-user-migration:
     runs-on: ubuntu-latest
@@ -90,6 +87,19 @@ jobs:
           dotnet ef database update --configuration Release --verbose
           echo "Migrations applied successfully"
           
+      - name: Apply Master Data Seeds
+        run: |
+          echo "Applying master data seeds (roles and base data)"
+          cd src/User/User.WebAPI
+          export DB_SERVER="microservices-sql-server.database.windows.net"
+          export DB_NAME="UserDB"
+          export DB_USER="sqladmin"
+          export DB_PASSWORD="Admin123!"
+          export ASPNETCORE_ENVIRONMENT="Production"
+          echo "Seeding master data..."
+          dotnet run --seed-data --configuration Release
+          echo "Master data seeding completed"
+          
       - name: Verify Results
         run: |
           echo "Verifying results"
@@ -100,4 +110,33 @@ jobs:
           export DB_PASSWORD="Admin123!"
           export ASPNETCORE_ENVIRONMENT="Production"
           dotnet ef migrations list --configuration Release
+          echo " Checking created roles..."
+          mkdir temp-verify
+          cd temp-verify
+          dotnet new console
+          dotnet add package System.Data.SqlClient
+          cat > Program.cs << 'EOF'
+          using System;
+          using System.Data.SqlClient;
+          
+          try 
+          {
+              var conn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+              using var connection = new SqlConnection(conn);
+              connection.Open();
+              using var cmd = new SqlCommand("SELECT Name FROM AspNetRoles ORDER BY Name", connection);
+              using var reader = cmd.ExecuteReader();
+              Console.WriteLine(" Roles created:");
+              while (reader.Read())
+              {
+                  Console.WriteLine($"  - {reader["Name"]}");
+              }
+          }
+          catch(Exception ex)
+          {
+              Console.WriteLine($" Verification failed: {ex.Message}");
+          }
+          EOF
+          dotnet run
+          cd ..
           echo "Test completed"
