@@ -27,72 +27,111 @@ jobs:
           dotnet tool install --global dotnet-ef --version 7.0.*
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
           
+      - name: Create Databases if Not Exist
+        run: |
+          echo "Creating databases if they don't exist"
+          mkdir temp-db-creation
+          cd temp-db-creation
+          dotnet new console
+          dotnet add package System.Data.SqlClient
+          
+          cat > Program.cs << 'EOF'
+          using System;
+          using System.Data.SqlClient;
+          
+          try 
+          {
+              // Conectar al servidor master para crear bases de datos
+              var masterConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=master;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+              
+              using var connection = new SqlConnection(masterConn);
+              connection.Open();
+              Console.WriteLine("Connected to master database");
+              
+              // Crear UserDB si no existe
+              using var cmdUser = new SqlCommand(@"
+                  IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'UserDB')
+                  BEGIN
+                      CREATE DATABASE [UserDB]
+                      PRINT 'UserDB created successfully'
+                  END
+                  ELSE
+                      PRINT 'UserDB already exists'
+              ", connection);
+              cmdUser.ExecuteNonQuery();
+              
+              // Crear CatalogDB si no existe
+              using var cmdCatalog = new SqlCommand(@"
+                  IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'CatalogDB')
+                  BEGIN
+                      CREATE DATABASE [CatalogDB]
+                      PRINT 'CatalogDB created successfully'
+                  END
+                  ELSE
+                      PRINT 'CatalogDB already exists'
+              ", connection);
+              cmdCatalog.ExecuteNonQuery();
+              
+              Console.WriteLine("Database creation process completed");
+          }
+          catch(Exception ex)
+          {
+              Console.WriteLine($"Database creation failed: {ex.Message}");
+              Environment.Exit(1);
+          }
+          EOF
+          
+          dotnet run
+          cd ..
+          
       - name: Test Database Connections
         run: |
-          echo "Testing database connections"
+          echo "Testing database connections after creation"
           mkdir temp-test
           cd temp-test
           dotnet new console
           dotnet add package System.Data.SqlClient
           
-          cat > TestUserDB.cs << 'EOF'
-          using System;
-          using System.Data.SqlClient;
-          
-          public static class TestUserDB 
-          {
-              public static void Test()
-              {
-                  try 
-                  {
-                      var conn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-                      using var connection = new SqlConnection(conn);
-                      connection.Open();
-                      Console.WriteLine("UserDB Connection successful");
-                      using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
-                      var count = cmd.ExecuteScalar();
-                      Console.WriteLine($"UserDB Tables found: {count}");
-                  }
-                  catch(Exception ex)
-                  {
-                      Console.WriteLine($"UserDB Connection failed: {ex.Message}");
-                      throw;
-                  }
-              }
-          }
-          EOF
-          
-          cat > TestCatalogDB.cs << 'EOF'
-          using System;
-          using System.Data.SqlClient;
-          
-          public static class TestCatalogDB 
-          {
-              public static void Test()
-              {
-                  try 
-                  {
-                      var conn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CatalogDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-                      using var connection = new SqlConnection(conn);
-                      connection.Open();
-                      Console.WriteLine("CatalogDB Connection successful");
-                      using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
-                      var count = cmd.ExecuteScalar();
-                      Console.WriteLine($"CatalogDB Tables found: {count}");
-                  }
-                  catch(Exception ex)
-                  {
-                      Console.WriteLine($"CatalogDB Connection failed: {ex.Message}");
-                      throw;
-                  }
-              }
-          }
-          EOF
-          
           cat > Program.cs << 'EOF'
+          using System;
+          using System.Data.SqlClient;
+          
           Console.WriteLine("=== TESTING DATABASE CONNECTIONS ===");
-          TestUserDB.Test();
-          TestCatalogDB.Test();
+          
+          // Test UserDB
+          try 
+          {
+              var userConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+              using var connection = new SqlConnection(userConn);
+              connection.Open();
+              Console.WriteLine("UserDB Connection successful");
+              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+              var count = cmd.ExecuteScalar();
+              Console.WriteLine($"UserDB Tables found: {count}");
+          }
+          catch(Exception ex)
+          {
+              Console.WriteLine($"UserDB Connection failed: {ex.Message}");
+              throw;
+          }
+          
+          // Test CatalogDB
+          try 
+          {
+              var catalogConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CatalogDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+              using var connection = new SqlConnection(catalogConn);
+              connection.Open();
+              Console.WriteLine("CatalogDB Connection successful");
+              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+              var count = cmd.ExecuteScalar();
+              Console.WriteLine($"CatalogDB Tables found: {count}");
+          }
+          catch(Exception ex)
+          {
+              Console.WriteLine($"CatalogDB Connection failed: {ex.Message}");
+              throw;
+          }
+          
           Console.WriteLine("=== ALL CONNECTIONS OK ===");
           EOF
           
