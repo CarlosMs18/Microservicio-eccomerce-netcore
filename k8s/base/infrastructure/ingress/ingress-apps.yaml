@@ -35,8 +35,8 @@ spec:
             name: user-service
             port:
               number: 80
-      - path: /api/Category
-        pathType: Prefix
+      - path: /api/Category/GetAll
+        pathType: Exact
         backend:
           service:
             name: catalog-service

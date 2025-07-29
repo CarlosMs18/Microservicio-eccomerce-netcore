@@ -105,12 +105,12 @@ namespace Catalog.WebAPI.Controllers
             }
         }
 
-        [HttpGet]
+        [HttpGet("GetAll")]
         [ProducesResponseType(typeof(IEnumerable<CategoryListResponse>), (int)HttpStatusCode.OK)]
         public async Task<ActionResult<IEnumerable<CategoryListResponse>>> GetAll()
         {
             var stopwatch = Stopwatch.StartNew();
-            var endpoint = "api/category";
+            var endpoint = "api/category/getall";
             var method = "GET";
 
             _metricsService.UpdateActiveConnections(1);

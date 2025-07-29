@@ -43,7 +43,7 @@ namespace Catalog.Infrastructure.Services.Internal
             // CategoryController endpoints
             _requestCounter.WithLabels("api/category", "POST");        // CreateCategory
             _requestCounter.WithLabels("api/category/{id}", "GET");    // GetCategory
-            _requestCounter.WithLabels("api/category", "GET");         // GetAll
+            _requestCounter.WithLabels("api/category/getall", "GET");         // GetAll
 
             // ProductController endpoints
             _requestCounter.WithLabels("api/product/updateproductprice", "PUT");  // UpdateProductPrice

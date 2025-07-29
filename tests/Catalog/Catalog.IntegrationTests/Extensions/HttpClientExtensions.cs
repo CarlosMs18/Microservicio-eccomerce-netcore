@@ -39,7 +39,7 @@ public static class HttpClientExtensions
     // ✅ Otros endpoints básicos
     public static async Task<HttpResponseMessage> GetCategoriesAsync(
         this HttpClient client)
-        => await client.GetAsync("/api/category");
+        => await client.GetAsync("/api/category/getall");
 
     public static async Task<HttpResponseMessage> GetCategoryAsync(
         this HttpClient client,
