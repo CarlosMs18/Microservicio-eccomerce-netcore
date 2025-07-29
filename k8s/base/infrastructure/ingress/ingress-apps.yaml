@@ -93,6 +93,13 @@ spec:
             name: catalog-service
             port:
               number: 80
+      - path: /api/Product/CreateProduct
+        pathType: Exact
+        backend:
+          service:
+            name: catalog-service
+            port:
+              number: 80
       - path: /api/Cart/AddProductToCart
         pathType: Exact
         backend:

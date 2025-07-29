@@ -18,5 +18,16 @@ namespace Catalog.Infrastructure.Repositories
                 .Include(p => p.Images)             
                 .FirstOrDefaultAsync(p => p.Id == productId);
         }
+
+        public async Task<Product?> GetByNameAsync(string name)
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var normalizedName = name.Trim().ToLower();
+                return await _context.Products
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.Name.Trim().ToLower() == normalizedName);
+            });
+        }
     }
 }

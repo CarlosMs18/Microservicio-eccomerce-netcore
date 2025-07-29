@@ -23,6 +23,43 @@ namespace Catalog.WebAPI.Controllers
             _metricsService = metricsService;
         }
 
+        [HttpPost("[action]")]
+        [Authorize]
+        [ProducesResponseType((int)HttpStatusCode.Created)]
+        [ProducesResponseType(typeof(string), (int)HttpStatusCode.BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<ActionResult<CreateProductResponse>> CreateProduct([FromBody] CreateProductCommand command)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var endpoint = "api/product/createproduct";
+            var method = "POST";
+
+            _metricsService.UpdateActiveConnections(1);
+            _metricsService.IncrementRequestCount(endpoint, method);
+
+            try
+            {
+                Console.WriteLine("Controlador CreateProduct");
+                var result = await _mediator.Send(command);
+
+                if (!result.Success)
+                {
+                    return BadRequest(result.Message);
+                }
+
+                return CreatedAtAction(
+                    nameof(GetProductById),
+                    new { id = result.ProductId },
+                    result);
+            }
+            finally
+            {
+                stopwatch.Stop();
+                _metricsService.RecordRequestDuration(endpoint, stopwatch.Elapsed.TotalSeconds);
+                _metricsService.UpdateActiveConnections(-1);
+            }
+        }
+
         [HttpPut("[action]")]
         [Authorize]
         [ProducesResponseType((int)HttpStatusCode.NoContent)]

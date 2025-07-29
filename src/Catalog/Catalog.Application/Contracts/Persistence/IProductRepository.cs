@@ -5,5 +5,6 @@ namespace Catalog.Application.Contracts.Persistence
     public interface IProductRepository : IAsyncRepository<Product>
     {
         Task<Product?> GetProductWithDetailsAsync(Guid productId);
+        Task<Product?> GetByNameAsync(string name);
     }
 }
