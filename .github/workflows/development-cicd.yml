@@ -2,7 +2,7 @@ name: Development CI/CD
 
 on:
   push:
-    branches: [ main, rama-catalog-testing-production-migration]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
