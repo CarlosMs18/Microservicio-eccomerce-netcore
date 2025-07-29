@@ -8,13 +8,13 @@ using Prometheus;
 using Serilog;
 using Shared.Infrastructure.Extensions;
 
-// 🎯 BOOTSTRAP LOGGER SIMPLIFICADO!!!!
+// 🎯 BOOTSTRAP LOGGER SIMPLIFICADO
 //!Para el test!
 SerilogConfigurator.ConfigureBootstrapLogger();
 
 try
 {
-    Log.Information("🚀 Iniciando Catalog Service!!");
+    Log.Information("🛍️ Iniciando Catalog Service");
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -39,7 +39,7 @@ try
 
     builder.Configuration.LogEndpointsConfiguration(environment, restPort, grpcPort);
 
-    Log.Information("✅ Catalog Service listo y ejecutándose");
+    Log.Information("✅ Catalog Service listo y ejecutándose en entorno: {Environment}", environment);
     await app.RunAsync();
 }
 catch (Exception ex)
@@ -79,8 +79,13 @@ static void ConfigureAppSettings(WebApplicationBuilder builder, string environme
 
     builder.Configuration
         .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-        .AddJsonFile($"appsettings.{environment}.json", optional: true)
+        .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: true)
         .AddEnvironmentVariables();
+
+    // 🔥 Log de configuración cargada
+    Log.Information("📋 Configuraciones cargadas:");
+    Log.Information("   - appsettings.json");
+    Log.Information("   - appsettings.{Environment}.json", environment);
 }
 
 static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder builder, string environment)
@@ -89,6 +94,8 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
     var portsConfig = builder.Configuration.GetSection("Ports");
     var restPort = portsConfig.GetValue<int>("Rest", 7204);
     var grpcPort = portsConfig.GetValue<int>("Grpc", 7205);
+
+    Log.Information("🚪 Configurando puertos - REST: {RestPort}, gRPC: {GrpcPort}", restPort, grpcPort);
 
     // Servicios básicos
     builder.Services.AddControllers();
@@ -114,25 +121,33 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
         Log.Information("🔐 Autenticación será manejada por TokenGrpcValidationMiddleware para {Environment}", environment);
     }
 
-    // Swagger solo para desarrollo y testing
-    if (environment == "Development" || environment == "Testing")
+    // Swagger solo para desarrollo y Kubernetes (no para Production)
+    if (environment == "Development" || environment == "Kubernetes")
     {
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
         {
             c.SwaggerDoc("v1", new() { Title = "Catalog API", Version = "v1" });
         });
+        Log.Information("📖 Swagger habilitado para entorno: {Environment}", environment);
     }
 
     // Configuración de Kestrel
     builder.WebHost.ConfigureKestrel(options =>
     {
+        // Límites más estrictos en producción
+        var maxBodySize = environment == "Production" ? 5 * 1024 * 1024 : 10 * 1024 * 1024; // 5MB en prod, 10MB en dev
+        options.Limits.MaxRequestBodySize = maxBodySize;
+        options.Limits.MinRequestBodyDataRate = null;
+
+        // REST Endpoint
         options.ListenAnyIP(restPort, listenOptions =>
         {
             listenOptions.Protocols = HttpProtocols.Http1;
             Log.Debug("🌐 HTTP REST configurado en puerto {Port}", restPort);
         });
 
+        // gRPC Endpoint
         options.ListenAnyIP(grpcPort, listenOptions =>
         {
             listenOptions.Protocols = HttpProtocols.Http2;
@@ -145,8 +160,8 @@ static (int restPort, int grpcPort) ConfigureServices(WebApplicationBuilder buil
 
 static void ConfigureMiddleware(WebApplication app, string environment)
 {
-    // Swagger solo para desarrollo y testing
-    if (environment == "Development" || environment == "Testing")
+    // Swagger solo para desarrollo y Kubernetes (no para Production)
+    if (environment == "Development" || environment == "Kubernetes")
     {
         app.UseSwagger();
         app.UseSwaggerUI(c =>
@@ -158,6 +173,8 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     app.UseHttpsRedirection();
     app.UseRouting();
+
+    // 🔥 ORDEN CORRECTO: UseHttpMetrics() después de UseRouting()
     app.UseHttpMetrics();
 
     // 🔐 CONFIGURACIÓN DE MIDDLEWARE DE AUTENTICACIÓN POR ENTORNO
@@ -178,9 +195,15 @@ static void ConfigureMiddleware(WebApplication app, string environment)
     }
 
     app.UseAuthorization();
+
+    // 🔥 ORDEN CORRECTO: MapMetrics() después de UseRouting()
     app.MapMetrics();
     app.MapControllers();
+
+    // gRPC Service
     app.MapGrpcService<Catalog.Infrastructure.Services.External.Grpc.CatalogGrpcService>();
+
+    // Middleware personalizado debe ir después de MapMetrics()
     app.UseMiddleware<ExceptionMiddleware>();
     app.UseSerilogRequestLogging();
 }

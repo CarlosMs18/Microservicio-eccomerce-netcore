@@ -1,17 +1,18 @@
-name: Test User Migration
+name: Test User & Catalog Migration
 
 on:
   push:
     branches:
-      - rama-test-migration
+      - rama-catalog-testing-production-migration
   workflow_dispatch:
 
 env:
   DOTNET_VERSION: '7.0.x'
 
 jobs:
-  test-user-migration:
+  test-migration:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,78 +27,412 @@ jobs:
           dotnet tool install --global dotnet-ef --version 7.0.*
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
           
-      - name: Test Database Connection
+      - name: List Directory Structure
         run: |
-          echo "Testing database connection"
-          mkdir temp-test
-          cd temp-test
+          echo "Checking directory structure..."
+          find . -name "*.csproj" -type f | head -20
+          ls -la src/
+          if [ -d "src/Catalog" ]; then
+            ls -la src/Catalog/
+          fi
+          if [ -d "src/Cart" ]; then
+            ls -la src/Cart/
+          fi
+          
+      - name: Create Databases if Not Exist
+        run: |
+          echo "Creating databases if they don't exist"
+          mkdir temp-db-creation
+          cd temp-db-creation
           dotnet new console
           dotnet add package System.Data.SqlClient
+          
           cat > Program.cs << 'EOF'
           using System;
           using System.Data.SqlClient;
           
           try 
           {
-              var conn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-              using var connection = new SqlConnection(conn);
+              // Conectar al servidor master para crear bases de datos - TIMEOUT AUMENTADO
+              var masterConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=master;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;";
+              
+              using var connection = new SqlConnection(masterConn);
               connection.Open();
-              Console.WriteLine("Connection successful");
-              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
-              var count = cmd.ExecuteScalar();
-              Console.WriteLine($"Tables found: {count}");
+              Console.WriteLine("Connected to master database");
+              
+              // Crear UserDB si no existe
+              using var cmdUser = new SqlCommand(@"
+                  IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'UserDB')
+                  BEGIN
+                      CREATE DATABASE [UserDB]
+                      PRINT 'UserDB created successfully'
+                  END
+                  ELSE
+                      PRINT 'UserDB already exists'
+              ", connection);
+              cmdUser.CommandTimeout = 120;
+              cmdUser.ExecuteNonQuery();
+              
+              // Crear CatalogDB si no existe
+              using var cmdCatalog = new SqlCommand(@"
+                  IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'CatalogDB')
+                  BEGIN
+                      CREATE DATABASE [CatalogDB]
+                      PRINT 'CatalogDB created successfully'
+                  END
+                  ELSE
+                      PRINT 'CatalogDB already exists'
+              ", connection);
+              cmdCatalog.CommandTimeout = 120;
+              cmdCatalog.ExecuteNonQuery();
+              
+              // Crear CartDB si no existe
+              using var cmdCart = new SqlCommand(@"
+                  IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'CartDB')
+                  BEGIN
+                      CREATE DATABASE [CartDB]
+                      PRINT 'CartDB created successfully'
+                  END
+                  ELSE
+                      PRINT 'CartDB already exists'
+              ", connection);
+              cmdCart.CommandTimeout = 120;
+              cmdCart.ExecuteNonQuery();
+              
+              Console.WriteLine("Database creation process completed");
           }
           catch(Exception ex)
           {
-              Console.WriteLine($"Connection failed: {ex.Message}");
+              Console.WriteLine($"Database creation failed: {ex.Message}");
               Environment.Exit(1);
           }
           EOF
+          
+          dotnet run
+          cd ..
+          
+      - name: Wake Up Databases
+        run: |
+          echo "Waking up databases with simple queries"
+          mkdir temp-wakeup
+          cd temp-wakeup
+          dotnet new console
+          dotnet add package System.Data.SqlClient
+          
+          cat > Program.cs << 'EOF'
+          using System;
+          using System.Data.SqlClient;
+          using System.Threading;
+          
+          Console.WriteLine("=== WAKING UP DATABASES ===");
+          
+          // Wake up UserDB
+          try 
+          {
+              var userConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;";
+              using var connection = new SqlConnection(userConn);
+              Console.WriteLine("Connecting to UserDB...");
+              connection.Open();
+              Console.WriteLine("UserDB is now awake");
+              using var cmd = new SqlCommand("SELECT 1", connection);
+              cmd.CommandTimeout = 120;
+              cmd.ExecuteScalar();
+              Thread.Sleep(2000);
+          }
+          catch(Exception ex)
+          {
+              Console.WriteLine($"UserDB wake up failed: {ex.Message}");
+          }
+          
+          // Wake up CatalogDB
+          try 
+          {
+              var catalogConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CatalogDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;";
+              using var connection = new SqlConnection(catalogConn);
+              Console.WriteLine("Connecting to CatalogDB...");
+              connection.Open();
+              Console.WriteLine("CatalogDB is now awake");
+              using var cmd = new SqlCommand("SELECT 1", connection);
+              cmd.CommandTimeout = 120;
+              cmd.ExecuteScalar();
+              Thread.Sleep(2000);
+          }
+          catch(Exception ex)
+          {
+              Console.WriteLine($"CatalogDB wake up failed: {ex.Message}");
+          }
+          
+                        // Wake up CartDB
+              try 
+              {
+                  var cartConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CartDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;";
+                  using var connection = new SqlConnection(cartConn);
+                  Console.WriteLine("Connecting to CartDB...");
+                  connection.Open();
+                  Console.WriteLine("CartDB is now awake");
+                  using var cmd = new SqlCommand("SELECT 1", connection);
+                  cmd.CommandTimeout = 120;
+                  cmd.ExecuteScalar();
+                  Thread.Sleep(2000);
+              }
+              catch(Exception ex)
+              {
+                  Console.WriteLine($"CartDB wake up failed: {ex.Message}");
+              }
+              
+              Console.WriteLine("=== DATABASES WARMED UP ===");
+          EOF
+          
+          dotnet run
+          cd ..
+          
+      - name: Test Database Connections
+        run: |
+          echo "Testing database connections after wakeup"
+          mkdir temp-test
+          cd temp-test
+          dotnet new console
+          dotnet add package System.Data.SqlClient
+          
+          cat > Program.cs << 'EOF'
+          using System;
+          using System.Data.SqlClient;
+          using System.Threading;
+          
+          Console.WriteLine("=== TESTING DATABASE CONNECTIONS ===");
+          
+          // Test UserDB with retry logic
+          for(int i = 0; i < 3; i++)
+          {
+              try 
+              {
+                  var userConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;";
+                  using var connection = new SqlConnection(userConn);
+                  connection.Open();
+                  Console.WriteLine("UserDB Connection successful");
+                  using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+                  cmd.CommandTimeout = 120;
+                  var count = cmd.ExecuteScalar();
+                  Console.WriteLine($"UserDB Tables found: {count}");
+                  break;
+              }
+              catch(Exception ex)
+              {
+                  Console.WriteLine($"UserDB Connection attempt {i+1} failed: {ex.Message}");
+                  if(i == 2) throw;
+                  Thread.Sleep(5000);
+              }
+          }
+          
+          // Test CatalogDB with retry logic
+          for(int i = 0; i < 3; i++)
+          {
+              try 
+              {
+                  var catalogConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CatalogDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;";
+                  using var connection = new SqlConnection(catalogConn);
+                  connection.Open();
+                  Console.WriteLine("CatalogDB Connection successful");
+                  using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+                  cmd.CommandTimeout = 120;
+                  var count = cmd.ExecuteScalar();
+                  Console.WriteLine($"CatalogDB Tables found: {count}");
+                  break;
+              }
+              catch(Exception ex)
+              {
+                  Console.WriteLine($"CatalogDB Connection attempt {i+1} failed: {ex.Message}");
+                  if(i == 2) throw;
+                  Thread.Sleep(5000);
+              }
+          }
+          
+          // Test CartDB with retry logic
+          for(int i = 0; i < 3; i++)
+          {
+              try 
+              {
+                  var cartConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CartDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;";
+                  using var connection = new SqlConnection(cartConn);
+                  connection.Open();
+                  Console.WriteLine("CartDB Connection successful");
+                  using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+                  cmd.CommandTimeout = 120;
+                  var count = cmd.ExecuteScalar();
+                  Console.WriteLine($"CartDB Tables found: {count}");
+                  break;
+              }
+              catch(Exception ex)
+              {
+                  Console.WriteLine($"CartDB Connection attempt {i+1} failed: {ex.Message}");
+                  if(i == 2) throw;
+                  Thread.Sleep(5000);
+              }
+          }
+          
+          Console.WriteLine("=== ALL CONNECTIONS OK ===");
+          EOF
+          
           dotnet run
           cd ..
           
       - name: Build User Service
         run: |
-          echo "Building User service"
-          cd src/User/User.WebAPI
-          dotnet build --configuration Release
+          echo "Building User service for Production"
+          if [ -f "src/User/User.WebAPI/User.WebAPI.csproj" ]; then
+            cd src/User/User.WebAPI
+            dotnet build --configuration Release
+          else
+            echo "User.WebAPI project not found at expected location"
+            find . -name "User.WebAPI.csproj" -type f
+            exit 1
+          fi
           
-      - name: Check Migrations
+      - name: Check User Migrations
         run: |
-          echo "Checking migrations"
+          echo "Checking User migrations"
           cd src/User/User.WebAPI
-          export DB_SERVER="microservices-sql-server.database.windows.net"
-          export DB_NAME="UserDB"
-          export DB_USER="sqladmin"
-          export DB_PASSWORD="Admin123!"
-          export ASPNETCORE_ENVIRONMENT="Production"
-          echo "Database variables configured"
-          echo "Available migrations:"
-          dotnet ef migrations list --configuration Release || echo "No migrations found"
           
-      - name: Apply Migrations
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="UserDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef migrations list --configuration Release || echo "No User migrations found"
+          
+      - name: Apply User Migrations
         run: |
-          echo "Applying migrations"
+          echo "Applying User migrations"
           cd src/User/User.WebAPI
-          export DB_SERVER="microservices-sql-server.database.windows.net"
-          export DB_NAME="UserDB"
-          export DB_USER="sqladmin"
-          export DB_PASSWORD="Admin123!"
-          export ASPNETCORE_ENVIRONMENT="Production"
-          echo "Setting up database environment variables"
+          
           dotnet clean
           dotnet build --configuration Release
-          dotnet ef database update --configuration Release --verbose
-          echo "Migrations applied successfully"
           
-      - name: Verify Results
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="UserDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef database update --configuration Release --verbose
+          
+          echo "User migrations applied successfully"
+
+      - name: Seed User Master Data  
         run: |
-          echo "Verifying results"
+          echo "Seeding User master data"
           cd src/User/User.WebAPI
+          
           export DB_SERVER="microservices-sql-server.database.windows.net"
           export DB_NAME="UserDB"
           export DB_USER="sqladmin"
           export DB_PASSWORD="Admin123!"
-          export ASPNETCORE_ENVIRONMENT="Production"
-          dotnet ef migrations list --configuration Release
-          echo "Test completed"
+          
+          dotnet run --configuration Release --seed-data --environment=Production
+          
+          echo "User seeding completed"
+
+      - name: Build Catalog Service
+        run: |
+          echo "Building Catalog service for Production"
+          cd src/Catalog/Catalog.WebApi
+          dotnet build --configuration Release
+          
+      - name: Check Catalog Migrations
+        run: |
+          echo "Checking Catalog migrations"
+          cd src/Catalog/Catalog.WebApi
+          
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CatalogDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef migrations list --configuration Release || echo "No Catalog migrations found"
+          
+      - name: Apply Catalog Migrations
+        run: |
+          echo "Applying Catalog migrations"
+          cd src/Catalog/Catalog.WebApi
+          
+          dotnet clean
+          dotnet build --configuration Release
+          
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CatalogDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef database update --configuration Release --verbose
+          
+          echo "Catalog migrations applied successfully"
+          
+      - name: Build Cart Service
+        run: |
+          echo "Building Cart service for Production"
+          cd src/Cart/Cart.WebAPI
+          dotnet build --configuration Release
+          
+      - name: Check Cart Migrations
+        run: |
+          echo "Checking Cart migrations"
+          cd src/Cart/Cart.WebAPI
+          
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CartDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef migrations list --configuration Release || echo "No Cart migrations found"
+          
+      - name: Apply Cart Migrations
+        run: |
+          echo "Applying Cart migrations"
+          cd src/Cart/Cart.WebAPI
+          
+          dotnet clean
+          dotnet build --configuration Release
+          
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CartDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef database update --configuration Release --verbose
+          
+          echo "Cart migrations applied successfully"
+          
+      - name: Verify All Results
+        run: |
+          echo "Verifying all migration results"
+          
+          echo "=== USER MIGRATIONS ==="
+          cd src/User/User.WebAPI
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="UserDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef migrations list --configuration Release
+          
+          echo ""
+          echo "=== CATALOG MIGRATIONS ==="
+          cd ../../../src/Catalog/Catalog.WebApi
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CatalogDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef migrations list --configuration Release
+          
+          echo ""
+          echo "=== CART MIGRATIONS ==="
+          cd ../../../src/Cart/Cart.WebAPI
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CartDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef migrations list --configuration Release
+          
+          echo ""
+          echo "ALL MIGRATIONS COMPLETED SUCCESSFULLY"

@@ -282,7 +282,8 @@ namespace Catalog.Infrastructure.Configuration
             var poolingParams = config.GetSection("ConnectionPooling");
             var templates = config.GetSection("ConnectionTemplates");
 
-            var template = templates["Remote"] ?? throw new InvalidOperationException("Template Remote no encontrado");
+            // 🔥 CAMBIO CRÍTICO: Usar template Azure para producción
+            var template = templates["Azure"] ?? throw new InvalidOperationException("Template Azure no encontrado");
 
             var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
             if (string.IsNullOrEmpty(dbPassword))
@@ -293,10 +294,11 @@ namespace Catalog.Infrastructure.Configuration
             var parameters = new Dictionary<string, string>
             {
                 ["server"] = connectionParams["server"] ?? throw new InvalidOperationException("Server no configurado para Production"),
-                ["database"] = config["Catalog:DatabaseName"] ?? "CatalogDB_Prod", // ← BD de producción
-                ["user"] = connectionParams["user"] ?? "sa",
+                ["database"] = config["Catalog:DatabaseName"] ?? "CatalogDB", // ← Tu BD real en Azure
+                ["user"] = connectionParams["user"] ?? "sqladmin", // ← Usuario correcto de Azure
                 ["password"] = dbPassword,
-                ["trust"] = connectionParams["trust"] ?? "true",
+                ["trust"] = connectionParams["trust"] ?? "false", // ← false para Azure SQL
+                ["encrypt"] = connectionParams["encrypt"] ?? "true", // ← true para Azure SQL
                 ["pooling"] = poolingParams["pooling"] ?? "true",
                 ["maxPoolSize"] = poolingParams["maxPoolSize"] ?? "100", // Más conexiones en prod
                 ["minPoolSize"] = poolingParams["minPoolSize"] ?? "5",
@@ -313,7 +315,7 @@ namespace Catalog.Infrastructure.Configuration
                 Database = new DatabaseConfiguration
                 {
                     MaxRetryCount = 10, // Más reintentos en prod
-                    MaxRetryDelaySeconds = 60, // Delays más largos
+                    MaxRetryDelaySeconds = 60, // Delays más largos para Azure
                     EnableDetailedErrors = false, // ← Seguridad en prod
                     EnableSensitiveDataLogging = false // ← Nunca en prod
                 },

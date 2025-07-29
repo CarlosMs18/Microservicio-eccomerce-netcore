@@ -45,3 +45,10 @@ patches:
     target:
       kind: NetworkPolicy
       name: cart-service-policy
+patchesJson6902:
+  - path: infrastructure/patches/ingress-auth-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: ecommerce-private-ingress

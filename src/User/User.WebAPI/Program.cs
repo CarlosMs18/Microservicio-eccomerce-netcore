@@ -9,6 +9,8 @@ using User.Infrastructure.Persistence;
 using User.Infrastructure.Services.External.Grpc;
 using User.WebAPI.Middlewares;
 using Users.Application;
+using Microsoft.AspNetCore.Identity;
+using User.Application.Models;
 
 // Test comment to trigger workflow v2
 // Bootstrap logger
@@ -21,11 +23,10 @@ try
 {
     Log.Information("👤 Iniciando User Service");
 
-
     var builder = WebApplication.CreateBuilder(args);
 
     // 1. Configuración básica
-    var environment = DetectEnvironment();
+    var environment = DetectEnvironment(args); // 🔥 PASAR args como parámetro
 
     ConfigureAppSettings(builder, environment);
     ConfigureSerilog(builder, environment);
@@ -35,9 +36,19 @@ try
 
     // 3. App pipeline
     var app = builder.Build();
+
+    // 🔥 NUEVO: Verificar si se ejecuta con --seed-data
+    if (args.Contains("--seed-data"))
+    {
+        Log.Information("🌱 Ejecutando seeding de datos maestros...");
+        await SeedMasterDataAsync(app.Services, environment);
+        Log.Information("✅ Seeding completado. Terminando aplicación.");
+        return; // Terminar después del seeding, no iniciar el servidor
+    }
+
     ConfigureMiddleware(app, environment);
 
-    // 4. Inicialización
+    // 4. Inicialización (solo para entornos de desarrollo)
     await app.Services.EnsureDatabaseAsync(environment);
 
     builder.Configuration.LogEndpointsConfiguration(environment, restPort, grpcPort);
@@ -55,8 +66,60 @@ finally
     Log.CloseAndFlush();
 }
 
-static string DetectEnvironment()
+// 🔥 NUEVA FUNCIÓN: Para seeding manual en producción
+static async Task SeedMasterDataAsync(IServiceProvider services, string environment)
 {
+    using var scope = services.CreateScope();
+    var scopedServices = scope.ServiceProvider;
+
+    try
+    {
+        var context = scopedServices.GetRequiredService<UserIdentityDbContext>();
+        var userManager = scopedServices.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scopedServices.GetRequiredService<RoleManager<ApplicationRole>>();
+
+        Log.Information("🔄 Verificando conexión a base de datos...");
+
+        // Verificar que la BD existe y está migrada
+        if (!await context.Database.CanConnectAsync())
+        {
+            throw new InvalidOperationException("No se puede conectar a la base de datos");
+        }
+
+        Log.Information("✅ Conexión exitosa. Ejecutando seeding...");
+
+        if (environment == "Production")
+        {
+            await MasterDataSeeder.SeedAsync(context, userManager, roleManager);
+        }
+        else
+        {
+            await DbInitializer.InitializeAsync(context, userManager, roleManager);
+        }
+
+        Log.Information("🎉 Seeding ejecutado exitosamente");
+        Log.Information("📊 Estado final - Usuarios: {UserCount}, Roles: {RoleCount}",
+            context.Users.Count(),
+            context.Roles.Count());
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "❌ Error crítico durante el seeding");
+        throw;
+    }
+}
+
+// 🔥 FUNCIÓN CORREGIDA: Ahora recibe args como parámetro
+static string DetectEnvironment(string[] args)
+{
+    // 🔥 NUEVA PRIORIDAD: Argumentos de línea de comandos
+    var envArg = args.FirstOrDefault(a => a.StartsWith("--environment="))?.Split('=')[1];
+    if (!string.IsNullOrEmpty(envArg))
+    {
+        Log.Information("🎯 Usando environment desde argumentos: {Environment}", envArg);
+        return envArg;
+    }
+
     // 🔥 PRIORIDAD: ASPNETCORE_ENVIRONMENT tiene la máxima prioridad
     var aspnetEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
     if (!string.IsNullOrEmpty(aspnetEnv))
@@ -76,6 +139,7 @@ static string DetectEnvironment()
     return "Development";
 }
 
+// Resto de las funciones sin cambios...
 static void ConfigureAppSettings(WebApplicationBuilder builder, string environment)
 {
     Log.Information("🔧 Entorno detectado: {Environment}", environment);
