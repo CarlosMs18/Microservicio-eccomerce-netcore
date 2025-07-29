@@ -8,7 +8,7 @@ using Prometheus;
 using Serilog;
 using Shared.Infrastructure.Extensions;
 
-// 🎯 BOOTSTRAP LOGGER SIMPLIFICADO!!!!
+// 🎯 BOOTSTRAP LOGGER SIMPLIFICADO
 //!Para el test!
 SerilogConfigurator.ConfigureBootstrapLogger();
 
