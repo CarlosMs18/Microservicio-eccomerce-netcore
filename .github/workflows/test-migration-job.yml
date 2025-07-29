@@ -1,4 +1,4 @@
-name: Test User, Catalog & Cart Migration
+name: Test User & Catalog Migration
 
 on:
   push:
@@ -38,9 +38,6 @@ jobs:
           if [ -d "src/User" ]; then
             ls -la src/User/
           fi
-          if [ -d "src/Cart" ]; then
-            ls -la src/Cart/
-          fi
           
       - name: Create Databases if Not Exist
         run: |
@@ -57,7 +54,7 @@ jobs:
           try 
           {
               // Conectar al servidor master para crear bases de datos
-              var masterConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=master;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;Command Timeout=120;";
+              var masterConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=master;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
               
               using var connection = new SqlConnection(masterConn);
               connection.Open();
@@ -87,18 +84,6 @@ jobs:
               ", connection);
               cmdCatalog.ExecuteNonQuery();
               
-              // Crear CartDB si no existe
-              using var cmdCart = new SqlCommand(@"
-                  IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'CartDB')
-                  BEGIN
-                      CREATE DATABASE [CartDB]
-                      PRINT 'CartDB created successfully'
-                  END
-                  ELSE
-                      PRINT 'CartDB already exists'
-              ", connection);
-              cmdCart.ExecuteNonQuery();
-              
               Console.WriteLine("Database creation process completed");
           }
           catch(Exception ex)
@@ -122,62 +107,49 @@ jobs:
           cat > Program.cs << 'EOF'
           using System;
           using System.Data.SqlClient;
-          using System.Threading.Tasks;
           
           Console.WriteLine("=== TESTING DATABASE CONNECTIONS ===");
           
-          async Task TestConnection(string name, string connectionString, int retries = 3)
+          // Test UserDB
+          try 
           {
-              for (int i = 0; i < retries; i++)
-              {
-                  try 
-                  {
-                      using var connection = new SqlConnection(connectionString);
-                      await connection.OpenAsync();
-                      Console.WriteLine($"{name} Connection successful on attempt {i + 1}");
-                      
-                      using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
-                      var count = await cmd.ExecuteScalarAsync();
-                      Console.WriteLine($"{name} Tables found: {count}");
-                      return;
-                  }
-                  catch(Exception ex)
-                  {
-                      Console.WriteLine($"{name} Connection attempt {i + 1} failed: {ex.Message}");
-                      if (i < retries - 1)
-                      {
-                          Console.WriteLine($"Retrying {name} in 10 seconds...");
-                          await Task.Delay(10000);
-                      }
-                      else
-                      {
-                          throw;
-                      }
-                  }
-              }
-          }
-          
-          try
-          {
-              var baseConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;Command Timeout=120;";
-              
-              await TestConnection("UserDB", baseConn + "Initial Catalog=UserDB;");
-              await TestConnection("CatalogDB", baseConn + "Initial Catalog=CatalogDB;");
-              await TestConnection("CartDB", baseConn + "Initial Catalog=CartDB;");
-              
-              Console.WriteLine("=== ALL CONNECTIONS OK ===");
+              var userConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+              using var connection = new SqlConnection(userConn);
+              connection.Open();
+              Console.WriteLine("UserDB Connection successful");
+              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+              var count = cmd.ExecuteScalar();
+              Console.WriteLine($"UserDB Tables found: {count}");
           }
           catch(Exception ex)
           {
-              Console.WriteLine($"Final connection test failed: {ex.Message}");
-              Environment.Exit(1);
+              Console.WriteLine($"UserDB Connection failed: {ex.Message}");
+              throw;
           }
+          
+          // Test CatalogDB
+          try 
+          {
+              var catalogConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CatalogDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+              using var connection = new SqlConnection(catalogConn);
+              connection.Open();
+              Console.WriteLine("CatalogDB Connection successful");
+              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+              var count = cmd.ExecuteScalar();
+              Console.WriteLine($"CatalogDB Tables found: {count}");
+          }
+          catch(Exception ex)
+          {
+              Console.WriteLine($"CatalogDB Connection failed: {ex.Message}");
+              throw;
+          }
+          
+          Console.WriteLine("=== ALL CONNECTIONS OK ===");
           EOF
           
           dotnet run
           cd ..
-
-      # ====== USER SERVICE ======
+          
       - name: Build User Service
         run: |
           echo "Building User service for Production"
@@ -233,7 +205,6 @@ jobs:
           
           echo "User seeding completed"
 
- 
       - name: Build Catalog Service
         run: |
           echo "Building Catalog service for Production"
@@ -268,61 +239,7 @@ jobs:
               dotnet ef database update --configuration Release --verbose
           
           echo "Catalog migrations applied successfully"
-
-      - name: Build Cart Service
-        run: |
-          echo "Building Cart service for Production"
-          if [ -f "src/Cart/Cart.WebAPI/Cart.WebAPI.csproj" ]; then
-            cd src/Cart/Cart.WebAPI
-            dotnet build --configuration Release
-          else
-            echo "Cart.WebAPI project not found at expected location"
-            find . -name "Cart.WebAPI.csproj" -type f
-            exit 1
-          fi
           
-      - name: Check Cart Migrations
-        run: |
-          echo "Checking Cart migrations"
-          cd src/Cart/Cart.WebAPI
-          
-          env ASPNETCORE_ENVIRONMENT=Production \
-              DB_SERVER="microservices-sql-server.database.windows.net" \
-              DB_NAME="CartDB" \
-              DB_USER="sqladmin" \
-              DB_PASSWORD="Admin123!" \
-              dotnet ef migrations list --configuration Release || echo "No Cart migrations found"
-          
-      - name: Apply Cart Migrations
-        run: |
-          echo "Applying Cart migrations"
-          cd src/Cart/Cart.WebAPI
-          
-          dotnet clean
-          dotnet build --configuration Release
-          
-          env ASPNETCORE_ENVIRONMENT=Production \
-              DB_SERVER="microservices-sql-server.database.windows.net" \
-              DB_NAME="CartDB" \
-              DB_USER="sqladmin" \
-              DB_PASSWORD="Admin123!" \
-              dotnet ef database update --configuration Release --verbose
-          
-          echo "Cart migrations applied successfully"
-
-      - name: Seed Cart Master Data  
-        run: |
-          echo "Seeding Cart master data (if needed)"
-          cd src/Cart/Cart.WebAPI
-          
-          export DB_SERVER="microservices-sql-server.database.windows.net"
-          export DB_NAME="CartDB"
-          export DB_USER="sqladmin"
-          export DB_PASSWORD="Admin123!"
-          
-          
-          echo "Cart seeding completed (or skipped if not implemented)"
-
       - name: Verify All Results
         run: |
           echo "Verifying all migration results"
@@ -347,14 +264,4 @@ jobs:
               dotnet ef migrations list --configuration Release
           
           echo ""
-          echo "=== CART MIGRATIONS ==="
-          cd ../../../src/Cart/Cart.WebAPI
-          env ASPNETCORE_ENVIRONMENT=Production \
-              DB_SERVER="microservices-sql-server.database.windows.net" \
-              DB_NAME="CartDB" \
-              DB_USER="sqladmin" \
-              DB_PASSWORD="Admin123!" \
-              dotnet ef migrations list --configuration Release
-          
-          echo ""
-          echo " ALL MIGRATIONS COMPLETED SUCCESSFULLY FOR USER, CATALOG & CART! "
+          echo "ALL MIGRATIONS COMPLETED SUCCESSFULLY"
