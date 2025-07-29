@@ -39,7 +39,7 @@ try
 
     builder.Configuration.LogEndpointsConfiguration(environment, restPort);
 
-    Log.Information("✅ Cart Service listo y ejecutándose");
+    Log.Information("✅ Cart Service listo y ejecutándose en entorno: {Environment}", environment);
     await app.RunAsync();
 }
 catch (Exception ex)
@@ -92,8 +92,13 @@ static void ConfigureAppSettings(WebApplicationBuilder builder, string environme
 
     builder.Configuration
         .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-        .AddJsonFile($"appsettings.{environment}.json", optional: true)
+        .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: true)
         .AddEnvironmentVariables();
+
+    // 🔥 Log de configuración cargada
+    Log.Information("📋 Configuraciones cargadas:");
+    Log.Information("   - appsettings.json");
+    Log.Information("   - appsettings.{Environment}.json", environment);
 }
 
 static void ConfigureSerilog(WebApplicationBuilder builder, string environment)
@@ -119,6 +124,8 @@ static int ConfigureServices(WebApplicationBuilder builder, string environment)
     var portsConfig = builder.Configuration.GetSection("Ports");
     var restPort = portsConfig.GetValue<int>("Rest", 5218);
 
+    Log.Information("🚪 Configurando puerto - REST: {RestPort}", restPort);
+
     // Servicios básicos
     builder.Services.AddControllers();
     builder.Services.AddHttpContextAccessor();
@@ -143,19 +150,25 @@ static int ConfigureServices(WebApplicationBuilder builder, string environment)
         Log.Information("🔐 Autenticación será manejada por TokenGrpcValidationMiddleware para {Environment}", environment);
     }
 
-    // Swagger solo para desarrollo y testing
-    if (environment == "Development" || environment == "Testing")
+    // Swagger solo para desarrollo y Kubernetes (no para Production)
+    if (environment == "Development" || environment == "Kubernetes")
     {
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
         {
             c.SwaggerDoc("v1", new() { Title = "Cart API", Version = "v1" });
         });
+        Log.Information("📖 Swagger habilitado para entorno: {Environment}", environment);
     }
 
     // Configuración de Kestrel
     builder.WebHost.ConfigureKestrel(options =>
     {
+        // Límites más estrictos en producción
+        var maxBodySize = environment == "Production" ? 5 * 1024 * 1024 : 10 * 1024 * 1024; // 5MB en prod, 10MB en dev
+        options.Limits.MaxRequestBodySize = maxBodySize;
+        options.Limits.MinRequestBodyDataRate = null;
+
         options.ListenAnyIP(restPort, listenOptions =>
         {
             listenOptions.Protocols = HttpProtocols.Http1;
@@ -168,8 +181,8 @@ static int ConfigureServices(WebApplicationBuilder builder, string environment)
 
 static void ConfigureMiddleware(WebApplication app, string environment)
 {
-    // Swagger solo para desarrollo y testing
-    if (environment == "Development" || environment == "Testing")
+    // Swagger solo para desarrollo y Kubernetes (no para Production)
+    if (environment == "Development" || environment == "Kubernetes")
     {
         app.UseSwagger();
         app.UseSwaggerUI(c =>
@@ -181,6 +194,8 @@ static void ConfigureMiddleware(WebApplication app, string environment)
 
     app.UseHttpsRedirection();
     app.UseRouting();
+
+    // 🔥 ORDEN CORRECTO: UseHttpMetrics() después de UseRouting()
     app.UseHttpMetrics();
 
     // 🔐 CONFIGURACIÓN DE MIDDLEWARE DE AUTENTICACIÓN POR ENTORNO
@@ -201,8 +216,12 @@ static void ConfigureMiddleware(WebApplication app, string environment)
     }
 
     app.UseAuthorization();
+
+    // 🔥 ORDEN CORRECTO: MapMetrics() después de UseRouting()
     app.MapMetrics();
     app.MapControllers();
+
+    // Middleware personalizado debe ir después de MapMetrics()
     app.UseMiddleware<ExceptionMiddleware>();
     app.UseSerilogRequestLogging();
 }
