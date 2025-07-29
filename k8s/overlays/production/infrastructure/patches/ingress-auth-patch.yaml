@@ -1,0 +1,3 @@
+- op: replace
+  path: /metadata/annotations/nginx.ingress.kubernetes.io~1auth-url
+  value: "http://user-service.prod.svc.cluster.local/api/User/validate-token"

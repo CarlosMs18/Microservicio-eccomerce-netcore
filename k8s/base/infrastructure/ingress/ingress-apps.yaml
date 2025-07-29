@@ -63,7 +63,7 @@ metadata:
   name: ecommerce-private-ingress
   annotations:
     kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/auth-url: "http://user-service.dev.svc.cluster.local/api/User/validate-token"
+    nginx.ingress.kubernetes.io/auth-url: "http://user-service.prod.svc.cluster.local/api/User/validate-token"
     nginx.ingress.kubernetes.io/auth-method: "GET"
     nginx.ingress.kubernetes.io/auth-request-headers: "authorization"
     nginx.ingress.kubernetes.io/auth-response-headers: "x-user-id,x-user-email,x-user-roles"
@@ -79,7 +79,7 @@ spec:
   - host: localhost 
     http:
       paths:
-      - path: /api/Category/CreateCategory
+      - path: /api/Category
         pathType: Exact
         backend:
           service:

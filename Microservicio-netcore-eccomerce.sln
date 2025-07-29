@@ -100,6 +100,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{0A256F41-B378-46A5-8CD4-70ADB3619C12}"
 	ProjectSection(SolutionItems) = preProject
 		.github\workflows\development-cicd.yml = .github\workflows\development-cicd.yml
+		.github\workflows\test-migration-job.yml = .github\workflows\test-migration-job.yml
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Catalog.IntegrationTests", "tests\Catalog\Catalog.IntegrationTests\Catalog.IntegrationTests.csproj", "{507C3F02-766E-48C1-ADD3-E0B4CF00A1E1}"
