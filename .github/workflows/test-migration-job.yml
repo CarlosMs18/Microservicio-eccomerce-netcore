@@ -57,7 +57,7 @@ jobs:
           try 
           {
               // Conectar al servidor master para crear bases de datos
-              var masterConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=master;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+              var masterConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=master;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;Command Timeout=120;";
               
               using var connection = new SqlConnection(masterConn);
               connection.Open();
@@ -122,67 +122,62 @@ jobs:
           cat > Program.cs << 'EOF'
           using System;
           using System.Data.SqlClient;
+          using System.Threading.Tasks;
           
           Console.WriteLine("=== TESTING DATABASE CONNECTIONS ===");
           
-          // Test UserDB
-          try 
+          async Task TestConnection(string name, string connectionString, int retries = 3)
           {
-              var userConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-              using var connection = new SqlConnection(userConn);
-              connection.Open();
-              Console.WriteLine("UserDB Connection successful");
-              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
-              var count = cmd.ExecuteScalar();
-              Console.WriteLine($"UserDB Tables found: {count}");
+              for (int i = 0; i < retries; i++)
+              {
+                  try 
+                  {
+                      using var connection = new SqlConnection(connectionString);
+                      await connection.OpenAsync();
+                      Console.WriteLine($"{name} Connection successful on attempt {i + 1}");
+                      
+                      using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
+                      var count = await cmd.ExecuteScalarAsync();
+                      Console.WriteLine($"{name} Tables found: {count}");
+                      return;
+                  }
+                  catch(Exception ex)
+                  {
+                      Console.WriteLine($"{name} Connection attempt {i + 1} failed: {ex.Message}");
+                      if (i < retries - 1)
+                      {
+                          Console.WriteLine($"Retrying {name} in 10 seconds...");
+                          await Task.Delay(10000);
+                      }
+                      else
+                      {
+                          throw;
+                      }
+                  }
+              }
+          }
+          
+          try
+          {
+              var baseConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;Command Timeout=120;";
+              
+              await TestConnection("UserDB", baseConn + "Initial Catalog=UserDB;");
+              await TestConnection("CatalogDB", baseConn + "Initial Catalog=CatalogDB;");
+              await TestConnection("CartDB", baseConn + "Initial Catalog=CartDB;");
+              
+              Console.WriteLine("=== ALL CONNECTIONS OK ===");
           }
           catch(Exception ex)
           {
-              Console.WriteLine($"UserDB Connection failed: {ex.Message}");
-              throw;
+              Console.WriteLine($"Final connection test failed: {ex.Message}");
+              Environment.Exit(1);
           }
-          
-          // Test CatalogDB
-          try 
-          {
-              var catalogConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CatalogDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-              using var connection = new SqlConnection(catalogConn);
-              connection.Open();
-              Console.WriteLine("CatalogDB Connection successful");
-              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
-              var count = cmd.ExecuteScalar();
-              Console.WriteLine($"CatalogDB Tables found: {count}");
-          }
-          catch(Exception ex)
-          {
-              Console.WriteLine($"CatalogDB Connection failed: {ex.Message}");
-              throw;
-          }
-          
-          // Test CartDB
-          try 
-          {
-              var cartConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CartDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-              using var connection = new SqlConnection(cartConn);
-              connection.Open();
-              Console.WriteLine("CartDB Connection successful");
-              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES", connection);
-              var count = cmd.ExecuteScalar();
-              Console.WriteLine($"CartDB Tables found: {count}");
-          }
-          catch(Exception ex)
-          {
-              Console.WriteLine($"CartDB Connection failed: {ex.Message}");
-              throw;
-          }
-          
-          Console.WriteLine("=== ALL CONNECTIONS OK ===");
           EOF
           
           dotnet run
           cd ..
 
-
+      # ====== USER SERVICE ======
       - name: Build User Service
         run: |
           echo "Building User service for Production"
@@ -238,7 +233,7 @@ jobs:
           
           echo "User seeding completed"
 
-     
+ 
       - name: Build Catalog Service
         run: |
           echo "Building Catalog service for Production"
@@ -324,9 +319,10 @@ jobs:
           export DB_NAME="CartDB"
           export DB_USER="sqladmin"
           export DB_PASSWORD="Admin123!"
-           
-          echo "Cart seeding completed (or skipped if not implemented)"       
-    
+          
+          
+          echo "Cart seeding completed (or skipped if not implemented)"
+
       - name: Verify All Results
         run: |
           echo "Verifying all migration results"
