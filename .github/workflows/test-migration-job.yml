@@ -369,13 +369,13 @@ jobs:
       - name: Build Cart Service
         run: |
           echo "Building Cart service for Production"
-          cd src/Cart/Cart.WebApi
+          cd src/Cart/Cart.WebAPI
           dotnet build --configuration Release
           
       - name: Check Cart Migrations
         run: |
           echo "Checking Cart migrations"
-          cd src/Cart/Cart.WebApi
+          cd src/Cart/Cart.WebAPI
           
           env ASPNETCORE_ENVIRONMENT=Production \
               DB_SERVER="microservices-sql-server.database.windows.net" \
@@ -387,7 +387,7 @@ jobs:
       - name: Apply Cart Migrations
         run: |
           echo "Applying Cart migrations"
-          cd src/Cart/Cart.WebApi
+          cd src/Cart/Cart.WebAPI
           
           dotnet clean
           dotnet build --configuration Release
@@ -426,7 +426,7 @@ jobs:
           
           echo ""
           echo "=== CART MIGRATIONS ==="
-          cd ../../../src/Cart/Cart.WebApi
+          cd ../../../src/Cart/Cart.WebAPI
           env ASPNETCORE_ENVIRONMENT=Production \
               DB_SERVER="microservices-sql-server.database.windows.net" \
               DB_NAME="CartDB" \
