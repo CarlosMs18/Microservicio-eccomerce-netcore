@@ -1,10 +1,12 @@
 name: Test User & Catalog Migration
 
 on:
-  push:
-    branches:
-      - rama-catalog-testing-production-migration
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "MIGRATE" to confirm production migration'
+        required: true
+        default: ''
 
 env:
   DOTNET_VERSION: '7.0.x'
@@ -14,6 +16,15 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Confirm Migration
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "MIGRATE" ]; then
+            echo "Migration cancelled. You must type 'MIGRATE' to confirm."
+            exit 1
+          fi
+          echo " Migration confirmed. Proceeding with PRODUCTION migration..."
+          echo "  This will modify PRODUCTION databases on Azure SQL"
+          
       - name: Checkout
         uses: actions/checkout@v4
         
@@ -401,6 +412,68 @@ jobs:
           
           echo "Cart migrations applied successfully"
           
+      - name: Post-Migration Health Check
+        run: |
+          echo "=== POST-MIGRATION HEALTH CHECK ==="
+          mkdir temp-health
+          cd temp-health
+          dotnet new console
+          dotnet add package System.Data.SqlClient
+          
+          cat > Program.cs << 'EOF'
+          using System;
+          using System.Data.SqlClient;
+          
+          Console.WriteLine(" Performing post-migration health checks...");
+          
+          // Health check UserDB
+          try {
+              var userConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=UserDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;";
+              using var connection = new SqlConnection(userConn);
+              connection.Open();
+              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'", connection);
+              cmd.CommandTimeout = 120;
+              var count = cmd.ExecuteScalar();
+              Console.WriteLine($" UserDB Health: {count} tables found");
+          } catch(Exception ex) {
+              Console.WriteLine($" UserDB Health FAILED: {ex.Message}");
+              Environment.Exit(1);
+          }
+          
+          // Health check CatalogDB
+          try {
+              var catalogConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CatalogDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;";
+              using var connection = new SqlConnection(catalogConn);
+              connection.Open();
+              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'", connection);
+              cmd.CommandTimeout = 120;
+              var count = cmd.ExecuteScalar();
+              Console.WriteLine($" CatalogDB Health: {count} tables found");
+          } catch(Exception ex) {
+              Console.WriteLine($" CatalogDB Health FAILED: {ex.Message}");
+              Environment.Exit(1);
+          }
+          
+          // Health check CartDB
+          try {
+              var cartConn = "Server=tcp:microservices-sql-server.database.windows.net,1433;Initial Catalog=CartDB;User ID=sqladmin;Password=Admin123!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=120;";
+              using var connection = new SqlConnection(cartConn);
+              connection.Open();
+              using var cmd = new SqlCommand("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'", connection);
+              cmd.CommandTimeout = 120;
+              var count = cmd.ExecuteScalar();
+              Console.WriteLine($" CartDB Health: {count} tables found");
+          } catch(Exception ex) {
+              Console.WriteLine($" CartDB Health FAILED: {ex.Message}");
+              Environment.Exit(1);
+          }
+          
+          Console.WriteLine(" ALL DATABASES HEALTHY!");
+          EOF
+          
+          dotnet run
+          cd ..
+          
       - name: Verify All Results
         run: |
           echo "Verifying all migration results"
@@ -435,4 +508,38 @@ jobs:
               dotnet ef migrations list --configuration Release
           
           echo ""
-          echo "ALL MIGRATIONS COMPLETED SUCCESSFULLY"
+          echo " ALL MIGRATIONS COMPLETED SUCCESSFULLY"
+          echo " Production databases are ready!"
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          echo "Migration failed, attempting rollback"
+          
+          echo "Rolling back User migrations"
+          cd src/User/User.WebAPI
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="UserDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef database update 0 --configuration Release || echo "User rollback failed"
+          
+          echo "Rolling back Catalog migrations"
+          cd ../../../src/Catalog/Catalog.WebApi
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CatalogDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef database update 0 --configuration Release || echo "Catalog rollback failed"
+          
+          echo "Rolling back Cart migrations"
+          cd ../../../src/Cart/Cart.WebAPI
+          env ASPNETCORE_ENVIRONMENT=Production \
+              DB_SERVER="microservices-sql-server.database.windows.net" \
+              DB_NAME="CartDB" \
+              DB_USER="sqladmin" \
+              DB_PASSWORD="Admin123!" \
+              dotnet ef database update 0 --configuration Release || echo "Cart rollback failed"
+          
+          echo "Rollback completed"

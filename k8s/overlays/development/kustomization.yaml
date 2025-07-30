@@ -20,7 +20,6 @@ images:
   - name: carlosms18/microservicio-cart:latest
     newName: carlosms18/microservicio-cart
     newTag: dev
-
 patches:
   - path: apps/patches/environment.yaml
     target:
@@ -34,7 +33,6 @@ patches:
     target:
       kind: Deployment
       name: user-service
-  
   - path: network-policies/sql-connection-patch.yaml
     target:
       kind: NetworkPolicy
@@ -54,3 +52,21 @@ patchesJson6902:
       version: v1
       kind: Ingress
       name: ecommerce-private-ingress
+  - path: apps/patches/ingress-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: ecommerce-public-ingress
+  - path: apps/patches/ingress-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: ecommerce-private-ingress
+  - path: apps/patches/ingress-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: health-checks-ingress

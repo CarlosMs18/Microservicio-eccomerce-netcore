@@ -52,3 +52,21 @@ patchesJson6902:
       version: v1
       kind: Ingress
       name: ecommerce-private-ingress
+  - path: apps/patches/ingress-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: ecommerce-public-ingress
+  - path: apps/patches/ingress-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: ecommerce-private-ingress
+  - path: apps/patches/ingress-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: health-checks-ingress
