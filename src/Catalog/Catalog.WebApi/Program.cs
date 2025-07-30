@@ -14,7 +14,7 @@ SerilogConfigurator.ConfigureBootstrapLogger();
 
 try
 {
-    Log.Information("🛍️ Iniciando Catalog Service");
+    Log.Information("🛍️ Iniciando Catalog Service!!");
 
     var builder = WebApplication.CreateBuilder(args);
 
