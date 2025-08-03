@@ -1,0 +1,15 @@
+name: Production Deploy
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, deploy-production ]  
+
+jobs:
+  test-workflow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Safety Check
+        run: |
+          echo " MODO SEGURO: Solo mostrando que existe el workflow"
+          echo "Este workflow NO hace deployment real"
+          echo "Es solo para que aparezca en la lista"
