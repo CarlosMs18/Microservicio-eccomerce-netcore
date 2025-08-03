@@ -189,6 +189,15 @@ namespace User.WebAPI.Controllers
             }
         }
 
+        [HttpGet("test")]
+        [ProducesResponseType((int)HttpStatusCode.OK)]
+        public IActionResult Test()
+        {
+            Console.WriteLine("OK");
+
+            return Ok("OK");
+        }
+
         /// <summary>
         /// Crea una respuesta de error estandarizada compatible con el formato esperado por el Ingress
         /// </summary>

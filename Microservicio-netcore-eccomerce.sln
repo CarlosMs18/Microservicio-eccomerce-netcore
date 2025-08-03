@@ -228,7 +228,6 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "patches", "patches", "{908CB9ED-A3BB-42D9-BCA9-26AFCDD67E2F}"
 	ProjectSection(SolutionItems) = preProject
 		k8s\overlays\development\infrastructure\patches\ingress-auth-patch.yaml = k8s\overlays\development\infrastructure\patches\ingress-auth-patch.yaml
-		k8s\overlays\development\infrastructure\patches\nginx-service-patch.yaml = k8s\overlays\development\infrastructure\patches\nginx-service-patch.yaml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infrastructure", "infrastructure", "{36F0E436-0E12-4B0B-9415-A834D1E397A9}"
@@ -236,7 +235,6 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "patches", "patches", "{FD3D638F-5640-4054-817E-7C59B5C0A60E}"
 	ProjectSection(SolutionItems) = preProject
 		k8s\overlays\production\infrastructure\patches\ingress-auth-patch.yaml = k8s\overlays\production\infrastructure\patches\ingress-auth-patch.yaml
-		k8s\overlays\production\infrastructure\patches\nginx-service-patch.yaml = k8s\overlays\production\infrastructure\patches\nginx-service-patch.yaml
 	EndProjectSection
 EndProject
 Global

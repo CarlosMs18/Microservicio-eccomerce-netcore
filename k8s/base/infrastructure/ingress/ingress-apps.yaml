@@ -34,6 +34,13 @@ spec:
             name: user-service
             port:
               number: 80
+      - path: /api/User/test
+        pathType: Exact
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 80
       - path: /api/Category/GetAll
         pathType: Exact
         backend:
