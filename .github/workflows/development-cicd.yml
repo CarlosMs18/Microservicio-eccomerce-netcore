@@ -2,7 +2,7 @@ name: Development CI/CD
 
 on:
   push:
-    branches: [ main, production-migration-improvements ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
