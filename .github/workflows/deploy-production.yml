@@ -1,88 +1,16 @@
 name: Production Deploy
-
 on:
   workflow_dispatch:
-    inputs:
-      confirmation:
-        description: 'Type "DEPLOY" to confirm production deployment'
-        required: true
-        default: ''
-
-env:
-  DOTNET_VERSION: '7.0.x'
-  AZURE_CONTAINER_REGISTRY: 'microservicioscarlos'
-  AKS_CLUSTER_NAME: 'ms-aks-carlos'
-  AKS_RESOURCE_GROUP: 'ms-aks-carlos_group'
+  push:
+    branches: [ deploy-production ]
+    paths: [ '.github/workflows/deploy-production.yml' ]
 
 jobs:
-  production-deploy:
+  test-workflow:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Confirm Deployment
+      - name: Just a test
         run: |
-          if [ "${{ github.event.inputs.confirmation }}" != "DEPLOY" ]; then
-            echo "Deployment cancelled. You must type 'DEPLOY' to confirm."
-            exit 1
-          fi
-          echo " Production deployment confirmed!"
-          
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-          
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }} 
-          
-      - name: Get AKS credentials
-        run: |
-          az aks get-credentials --resource-group ${{ env.AKS_RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }}
-          
-      - name: Login to ACR
-        run: |
-          az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
-          
-      - name: Build and Push Images to ACR
-        run: |
-          echo "Building images with latest tag"
-          ACR_URL="${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io"
-   
-          echo "Building Cart service..."
-          dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
-          docker build -t $ACR_URL/microservicio-cart:latest -f src/Cart/Cart.WebAPI/Dockerfile .
-          docker push $ACR_URL/microservicio-cart:latest
-          
-   
-          echo "Building Catalog service..."
-          dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
-          docker build -t $ACR_URL/microservicio-catalog:latest -f src/Catalog/Catalog.WebApi/Dockerfile .
-          docker push $ACR_URL/microservicio-catalog:latest
-          
-
-          echo "Building User service..."
-          dotnet publish src/User/User.WebAPI/User.WebAPI.csproj -c Release -o src/User/publish
-          docker build -t $ACR_URL/microservicio-usuario:latest -f src/User/User.WebAPI/Dockerfile .
-          docker push $ACR_URL/microservicio-usuario:latest
-          
-          echo " All images built and pushed to ACR with latest tag!"
-          
-      - name: Deploy to Production AKS
-        run: |
-          echo " Deploying to production AKS cluster..."
-          kubectl apply -k k8s/overlays/production/
-          echo " Production deployment completed!"
-          
-      - name: Verify Deployment
-        run: |
-          echo " Verifying deployment..."
-          kubectl get pods -n prod
-          kubectl wait --for=condition=ready pod -l app=cart-service -n prod --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=catalog-service -n prod --timeout=300s  
-          kubectl wait --for=condition=ready pod -l app=user-service -n prod --timeout=300s
-          echo " Deployment verification completed!"
+          echo "Production Deploy workflow is now visible!"
+          echo "This is just a test run to make it appear in GitHub Actions"
+          echo "No actual deployment happening here"
