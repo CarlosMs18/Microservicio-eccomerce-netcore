@@ -140,24 +140,27 @@ jobs:
           
       - name: Build All Services for Development
         run: |
+          TAG=${GITHUB_SHA:0:7}
+          echo "Using tag: $TAG"
+          
           echo "Building all services for development environment..."
           
           echo "Building Cart service..."
           dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
-          docker build -t cart-service:dev -f src/Cart/Cart.WebAPI/Dockerfile .
-          kind load docker-image cart-service:dev --name netpol-test
+          docker build -t cart-service:$TAG -f src/Cart/Cart.WebAPI/Dockerfile .
+          kind load docker-image cart-service:$TAG --name netpol-test
           
           echo "Building Catalog service..."
           dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
-          docker build -t catalog-service:dev -f src/Catalog/Catalog.WebApi/Dockerfile .
-          kind load docker-image catalog-service:dev --name netpol-test
+          docker build -t catalog-service:$TAG -f src/Catalog/Catalog.WebApi/Dockerfile .
+          kind load docker-image catalog-service:$TAG --name netpol-test
           
           echo "Building User service..."
           dotnet publish src/User/User.WebAPI/User.WebAPI.csproj -c Release -o src/User/publish
-          docker build -t user-service:dev -f src/User/User.WebAPI/Dockerfile .
-          kind load docker-image user-service:dev --name netpol-test
+          docker build -t user-service:$TAG -f src/User/User.WebAPI/Dockerfile .
+          kind load docker-image user-service:$TAG --name netpol-test
           
-          echo "All images built and loaded successfully!"
+          echo "All images built and loaded successfully with tag: $TAG"
           
       - name: Debug Kustomization Files
         run: |

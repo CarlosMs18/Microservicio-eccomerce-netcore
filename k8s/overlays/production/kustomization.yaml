@@ -13,13 +13,10 @@ namespace: prod
 images:
   - name: carlosms18/microservicio-usuario:latest
     newName: carlosms18/microservicio-usuario
-    newTag: prod
   - name: carlosms18/microservicio-catalog:latest
     newName: carlosms18/microservicio-catalog
-    newTag: prod
   - name: carlosms18/microservicio-cart:latest
     newName: carlosms18/microservicio-cart
-    newTag: prod
 patches:
   - path: apps/patches/environment.yaml
     target:
@@ -52,3 +49,21 @@ patchesJson6902:
       version: v1
       kind: Ingress
       name: ecommerce-private-ingress
+  - path: apps/patches/ingress-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: ecommerce-public-ingress
+  - path: apps/patches/ingress-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: ecommerce-private-ingress
+  - path: apps/patches/ingress-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: health-checks-ingress
