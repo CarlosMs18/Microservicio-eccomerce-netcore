@@ -13,13 +13,10 @@ namespace: prod
 images:
   - name: carlosms18/microservicio-usuario:latest
     newName: carlosms18/microservicio-usuario
-    newTag: prod
   - name: carlosms18/microservicio-catalog:latest
     newName: carlosms18/microservicio-catalog
-    newTag: prod
   - name: carlosms18/microservicio-cart:latest
     newName: carlosms18/microservicio-cart
-    newTag: prod
 patches:
   - path: apps/patches/environment.yaml
     target:

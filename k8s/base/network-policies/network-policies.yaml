@@ -1,24 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: default-deny-all
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  - Egress
-  egress: 
-  - to: []
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: user-service-policy
+  name: user-service-policy-temp
 spec:
   podSelector:
     matchLabels:
@@ -27,43 +10,14 @@ spec:
   - Ingress
   - Egress
   ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: ingress-nginx
-    ports:
-    - protocol: TCP
-      port: 80
-  - from:
-    - podSelector:
-        matchLabels:
-          app: cart-service
-    - podSelector:
-        matchLabels:
-          app: catalog-service
-    ports:
-    - protocol: TCP
-      port: 80
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: monitoring
-      podSelector:
-        matchLabels:
-          app.kubernetes.io/name: prometheus
-    ports:
-    - protocol: TCP
-      port: 80 
+  - {} 
   egress:
-  - to: []
-    ports:
-    - protocol: UDP
-      port: 53
+  - {} 
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: catalog-service-policy
+  name: catalog-service-policy-temp
 spec:
   podSelector:
     matchLabels:
@@ -72,47 +26,14 @@ spec:
   - Ingress
   - Egress
   ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: ingress-nginx
-    ports:
-    - protocol: TCP
-      port: 80
-  - from:
-    - podSelector:
-        matchLabels:
-          app: cart-service
-    ports:
-    - protocol: TCP
-      port: 7205  
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: monitoring
-      podSelector:
-        matchLabels:
-          app.kubernetes.io/name: prometheus
-    ports:
-    - protocol: TCP
-      port: 80
+  - {} 
   egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: rabbitmq-service
-    ports:
-    - protocol: TCP
-      port: 5672
-  - to: []
-    ports:
-    - protocol: UDP
-      port: 53
+  - {}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: cart-service-policy
+  name: cart-service-policy-temp
 spec:
   podSelector:
     matchLabels:
@@ -121,221 +42,6 @@ spec:
   - Ingress
   - Egress
   ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: ingress-nginx
-    ports:
-    - protocol: TCP
-      port: 80
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: monitoring
-      podSelector:
-        matchLabels:
-          app.kubernetes.io/name: prometheus
-    ports:
-    - protocol: TCP
-      port: 80
+  - {} 
   egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: user-service
-    ports:
-    - protocol: TCP
-      port: 80
-  - to:
-    - podSelector:
-        matchLabels:
-          app: catalog-service
-    ports:
-    - protocol: TCP
-      port: 7205  
-  - to:
-    - podSelector:
-        matchLabels:
-          app: rabbitmq-service
-    ports:
-    - protocol: TCP
-      port: 5672
-  - to: []
-    ports:
-    - protocol: UDP
-      port: 53
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: sql-service-policy
-spec:
-  podSelector:
-    matchLabels:
-      app: sql-server
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: user-service
-    - podSelector:
-        matchLabels:
-          app: catalog-service
-    - podSelector:
-        matchLabels:
-          app: cart-service
-    ports:
-    - protocol: TCP
-      port: 1433
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: rabbitmq-service-policy
-spec:
-  podSelector:
-    matchLabels:
-      app: rabbitmq-service
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: catalog-service
-    - podSelector:
-        matchLabels:
-          app: cart-service
-    ports:
-    - protocol: TCP
-      port: 5672
-
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny-all-monitoring
-  namespace: monitoring
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  - Egress
-  egress: 
-  - to: []
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: prometheus-policy
-  namespace: monitoring
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: prometheus
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/name: grafana
-    ports:
-    - protocol: TCP
-      port: 9090
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: dev
-    ports:
-    - protocol: TCP
-      port: 80  
-  - to:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/name: prometheus
-  - to: []
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: grafana-policy
-  namespace: monitoring
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: grafana
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: ingress-nginx
-    ports:
-    - protocol: TCP
-      port: 3000
-  egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/name: prometheus
-    ports:
-    - protocol: TCP
-      port: 9090
-  - to: []
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: prometheus-stack-components-policy
-  namespace: monitoring
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/part-of: kube-prometheus-stack
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/part-of: kube-prometheus-stack
-  egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/part-of: kube-prometheus-stack
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 443
-    - protocol: TCP
-      port: 6443
-  - to: []
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
+  - {} 
