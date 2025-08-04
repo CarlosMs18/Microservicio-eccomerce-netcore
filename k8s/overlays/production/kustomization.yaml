@@ -11,11 +11,11 @@ resources:
   - ../../base/network-policies
 namespace: prod
 images:
-  - name: carlosms18/microservicio-usuario:latest
+  - name: microservicioscarlos.azurecr.io/microservicio-usuario:latest
     newName: carlosms18/microservicio-usuario
-  - name: carlosms18/microservicio-catalog:latest
+  - name: microservicioscarlos.azurecr.io/microservicio-catalog:latest
     newName: carlosms18/microservicio-catalog
-  - name: carlosms18/microservicio-cart:latest
+  - name: microservicioscarlos.azurecr.io/microservicio-cart:latest
     newName: carlosms18/microservicio-cart
 patches:
   - path: apps/patches/environment.yaml
