@@ -70,6 +70,8 @@ jobs:
   cd-deploy:
     needs: [detect-changes, ci-tests]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: needs.detect-changes.outputs.cart == 'true' || needs.detect-changes.outputs.catalog == 'true' || needs.detect-changes.outputs.user == 'true'
     
     steps:
@@ -114,11 +116,27 @@ jobs:
           TAG=${GITHUB_SHA:0:7}
           echo "Updating kustomization.yaml with tag: $TAG"
           
-         
           sed -i "s|newTag: .*|newTag: $TAG|g" k8s/overlays/development/kustomization.yaml
           
           echo "Updated kustomization.yaml content:"
           cat k8s/overlays/development/kustomization.yaml
+
+      - name: Commit and Push Updated Kustomization
+        run: |
+          TAG=${GITHUB_SHA:0:7}
+          
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          if git diff --quiet k8s/overlays/development/kustomization.yaml; then
+            echo "No changes detected in kustomization.yaml"
+          else
+            echo "Changes detected, committing and pushing..."
+            git add k8s/overlays/development/kustomization.yaml
+            git commit -m "chore: update development kustomization with image tag $TAG [skip ci]"
+            git push origin HEAD:main
+            echo "Kustomization updated and pushed to repository with tag: $TAG"
+          fi
           
       - name: Create Kind cluster
         uses: helm/kind-action@v1.10.0
@@ -317,7 +335,7 @@ jobs:
               echo "User service not found"
             fi
           else
-            echo "ERROR: Dev namespace still not found!"
+            echo "ERROR: Dev namespace still not found!!!"
           fi
           
       - name: Cleanup
