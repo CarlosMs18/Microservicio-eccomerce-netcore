@@ -134,7 +134,7 @@ jobs:
             echo "Changes detected, committing and pushing..."
             git add k8s/overlays/development/kustomization.yaml
             git commit -m "chore: update development kustomization with image tag $TAG [skip ci]"
-            git push
+            git push origin HEAD:main
             echo "Kustomization updated and pushed to repository with tag: $TAG"
           fi
           
