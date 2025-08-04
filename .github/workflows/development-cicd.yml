@@ -335,7 +335,7 @@ jobs:
               echo "User service not found"
             fi
           else
-            echo "ERROR: Dev namespace still not found!"
+            echo "ERROR: Dev namespace still not found!!!"
           fi
           
       - name: Cleanup
