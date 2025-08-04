@@ -1,69 +1,69 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - namespace.yaml                   
-  - ../../base/apps/user
-  - ../../base/apps/catalog
-  - ../../base/apps/cart
-  - sql-secrets.yaml
-  - ../../base/infrastructure/messaging
-  - ../../base/infrastructure/ingress
-  - ../../base/network-policies
+ - namespace.yaml                   
+ - ../../base/apps/user
+ - ../../base/apps/catalog
+ - ../../base/apps/cart
+ - sql-secrets.yaml
+ - ../../base/infrastructure/messaging
+ - ../../base/infrastructure/ingress
+ - ../../base/network-policies
 namespace: prod
 images:
-  - name: carlosms18/microservicio-usuario:latest
-    newName: carlosms18/microservicio-usuario
-  - name: carlosms18/microservicio-catalog:latest
-    newName: carlosms18/microservicio-catalog
-  - name: carlosms18/microservicio-cart:latest
-    newName: carlosms18/microservicio-cart
+ - name: carlosms18/microservicio-usuario:latest
+   newName: microservicioscarlos.azurecr.io/microservicio-usuario
+ - name: carlosms18/microservicio-catalog:latest
+   newName: microservicioscarlos.azurecr.io/microservicio-catalog
+ - name: carlosms18/microservicio-cart:latest
+   newName: microservicioscarlos.azurecr.io/microservicio-cart
 patches:
-  - path: apps/patches/environment.yaml
-    target:
-      kind: Deployment
-      name: cart-service
-  - path: apps/patches/environment.yaml
-    target:
-      kind: Deployment
-      name: catalog-service
-  - path: apps/patches/environment.yaml
-    target:
-      kind: Deployment
-      name: user-service
-  - path: network-policies/sql-connection-patch.yaml
-    target:
-      kind: NetworkPolicy
-      name: user-service-policy
-  - path: network-policies/sql-connection-patch.yaml  
-    target:
-      kind: NetworkPolicy
-      name: catalog-service-policy
-  - path: network-policies/sql-connection-patch.yaml
-    target:
-      kind: NetworkPolicy
-      name: cart-service-policy
+ - path: apps/patches/environment.yaml
+   target:
+     kind: Deployment
+     name: cart-service
+ - path: apps/patches/environment.yaml
+   target:
+     kind: Deployment
+     name: catalog-service
+ - path: apps/patches/environment.yaml
+   target:
+     kind: Deployment
+     name: user-service
+ - path: network-policies/sql-connection-patch.yaml
+   target:
+     kind: NetworkPolicy
+     name: user-service-policy
+ - path: network-policies/sql-connection-patch.yaml  
+   target:
+     kind: NetworkPolicy
+     name: catalog-service-policy
+ - path: network-policies/sql-connection-patch.yaml
+   target:
+     kind: NetworkPolicy
+     name: cart-service-policy
 patchesJson6902:
-  - path: infrastructure/patches/ingress-auth-patch.yaml
-    target:
-      group: networking.k8s.io
-      version: v1
-      kind: Ingress
-      name: ecommerce-private-ingress
-  - path: apps/patches/ingress-patch.yaml
-    target:
-      group: networking.k8s.io
-      version: v1
-      kind: Ingress
-      name: ecommerce-public-ingress
-  - path: apps/patches/ingress-patch.yaml
-    target:
-      group: networking.k8s.io
-      version: v1
-      kind: Ingress
-      name: ecommerce-private-ingress
-  - path: apps/patches/ingress-patch.yaml
-    target:
-      group: networking.k8s.io
-      version: v1
-      kind: Ingress
-      name: health-checks-ingress
+ - path: infrastructure/patches/ingress-auth-patch.yaml
+   target:
+     group: networking.k8s.io
+     version: v1
+     kind: Ingress
+     name: ecommerce-private-ingress
+ - path: apps/patches/ingress-patch.yaml
+   target:
+     group: networking.k8s.io
+     version: v1
+     kind: Ingress
+     name: ecommerce-public-ingress
+ - path: apps/patches/ingress-patch.yaml
+   target:
+     group: networking.k8s.io
+     version: v1
+     kind: Ingress
+     name: ecommerce-private-ingress
+ - path: apps/patches/ingress-patch.yaml
+   target:
+     group: networking.k8s.io
+     version: v1
+     kind: Ingress
+     name: health-checks-ingress

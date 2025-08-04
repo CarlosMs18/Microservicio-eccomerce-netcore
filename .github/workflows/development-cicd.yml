@@ -81,6 +81,45 @@ jobs:
         with:
           dotnet-version: '7.0.x'
           
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Build and Push Images to Docker Hub
+        run: |
+          TAG=${GITHUB_SHA:0:7}
+          echo "Using tag: $TAG for Docker Hub push"
+          
+          echo "Building and pushing Cart service..."
+          dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
+          docker build -t carlosms18/microservicio-cart:$TAG -f src/Cart/Cart.WebAPI/Dockerfile .
+          docker push carlosms18/microservicio-cart:$TAG
+          
+          echo "Building and pushing Catalog service..."
+          dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
+          docker build -t carlosms18/microservicio-catalog:$TAG -f src/Catalog/Catalog.WebApi/Dockerfile .
+          docker push carlosms18/microservicio-catalog:$TAG
+          
+          echo "Building and pushing User service..."
+          dotnet publish src/User/User.WebAPI/User.WebAPI.csproj -c Release -o src/User/publish
+          docker build -t carlosms18/microservicio-usuario:$TAG -f src/User/User.WebAPI/Dockerfile .
+          docker push carlosms18/microservicio-usuario:$TAG
+          
+          echo "All images built and pushed to Docker Hub with tag: $TAG"
+          
+      - name: Update Kustomization with New Tags
+        run: |
+          TAG=${GITHUB_SHA:0:7}
+          echo "Updating kustomization.yaml with tag: $TAG"
+          
+         
+          sed -i "s|newTag: .*|newTag: $TAG|g" k8s/overlays/development/kustomization.yaml
+          
+          echo "Updated kustomization.yaml content:"
+          cat k8s/overlays/development/kustomization.yaml
+          
       - name: Create Kind cluster
         uses: helm/kind-action@v1.10.0
         with:
@@ -138,29 +177,24 @@ jobs:
           
           echo "Prometheus Stack installed successfully!"
           
-      - name: Build All Services for Development
+      - name: Build Local Images for Kind
         run: |
           TAG=${GITHUB_SHA:0:7}
-          echo "Using tag: $TAG"
+          echo "Building local images for Kind with tag: $TAG"
           
-          echo "Building all services for development environment..."
-          
-          echo "Building Cart service..."
-          dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
+          echo "Building Cart service for Kind..."
           docker build -t cart-service:$TAG -f src/Cart/Cart.WebAPI/Dockerfile .
           kind load docker-image cart-service:$TAG --name netpol-test
           
-          echo "Building Catalog service..."
-          dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
+          echo "Building Catalog service for Kind..."
           docker build -t catalog-service:$TAG -f src/Catalog/Catalog.WebApi/Dockerfile .
           kind load docker-image catalog-service:$TAG --name netpol-test
           
-          echo "Building User service..."
-          dotnet publish src/User/User.WebAPI/User.WebAPI.csproj -c Release -o src/User/publish
+          echo "Building User service for Kind..."
           docker build -t user-service:$TAG -f src/User/User.WebAPI/Dockerfile .
           kind load docker-image user-service:$TAG --name netpol-test
           
-          echo "All images built and loaded successfully with tag: $TAG"
+          echo "All images built and loaded to Kind successfully with tag: $TAG"
           
       - name: Debug Kustomization Files
         run: |

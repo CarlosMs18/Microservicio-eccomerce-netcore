@@ -99,6 +99,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{87E2
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{0A256F41-B378-46A5-8CD4-70ADB3619C12}"
 	ProjectSection(SolutionItems) = preProject
+		.github\workflows\deploy-production.yml = .github\workflows\deploy-production.yml
 		.github\workflows\development-cicd.yml = .github\workflows\development-cicd.yml
 		.github\workflows\test-migration-job.yml = .github\workflows\test-migration-job.yml
 	EndProjectSection
