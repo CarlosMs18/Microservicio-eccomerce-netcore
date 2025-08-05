@@ -134,7 +134,7 @@ jobs:
             echo "Changes detected, committing and pushing..."
             git add k8s/overlays/development/kustomization.yaml
             git commit -m "chore: update development kustomization with image tag $TAG [skip ci]"
-            git push origin HEAD:main
+            git push origin HEAD:main --force-with-lease
             echo "Kustomization updated and pushed to repository with tag: $TAG"
           fi
           
@@ -335,7 +335,7 @@ jobs:
               echo "User service not found"
             fi
           else
-            echo "ERROR: Dev namespace still not found!!!"
+            echo "ERROR: Dev namespace still not found!"
           fi
           
       - name: Cleanup
