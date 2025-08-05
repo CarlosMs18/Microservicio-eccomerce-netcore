@@ -193,6 +193,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{AF35
 	ProjectSection(SolutionItems) = preProject
 		k8s\scripts\deploy-dev.sh = k8s\scripts\deploy-dev.sh
 		k8s\scripts\deploy-prod.sh = k8s\scripts\deploy-prod.sh
+		k8s\scripts\setup-argocd-app.sh = k8s\scripts\setup-argocd-app.sh
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "namespaces", "namespaces", "{39620063-92EA-4752-91E4-768D56847B62}"
@@ -236,6 +237,11 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "patches", "patches", "{FD3D638F-5640-4054-817E-7C59B5C0A60E}"
 	ProjectSection(SolutionItems) = preProject
 		k8s\overlays\production\infrastructure\patches\ingress-auth-patch.yaml = k8s\overlays\production\infrastructure\patches\ingress-auth-patch.yaml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "argocd", "argocd", "{A9990FC5-AD6D-4109-BF3A-7605293B20C1}"
+	ProjectSection(SolutionItems) = preProject
+		k8s\argocd\production-app.yaml = k8s\argocd\production-app.yaml
 	EndProjectSection
 EndProject
 Global
@@ -383,6 +389,7 @@ Global
 		{908CB9ED-A3BB-42D9-BCA9-26AFCDD67E2F} = {F10E587E-29B5-41F8-892D-FC2DD1455DF3}
 		{36F0E436-0E12-4B0B-9415-A834D1E397A9} = {0072CF27-078C-477F-81BE-CF4AD59B9261}
 		{FD3D638F-5640-4054-817E-7C59B5C0A60E} = {36F0E436-0E12-4B0B-9415-A834D1E397A9}
+		{A9990FC5-AD6D-4109-BF3A-7605293B20C1} = {E4C00B5E-3699-44B8-8CA1-97577B858B48}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BACC71D-1CC4-46AF-A7D1-C1ED5C93F8A6}

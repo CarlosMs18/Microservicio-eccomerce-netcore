@@ -1,4 +1,5 @@
 name: Production Deploy
+
 on:
   workflow_dispatch:
     inputs:
@@ -6,15 +7,16 @@ on:
         description: 'Type "DEPLOY" to confirm production deployment'
         required: true
         default: ''
+
 env:
   DOTNET_VERSION: '7.0.x'
   AZURE_CONTAINER_REGISTRY: 'microservicioscarlos'
-  AKS_CLUSTER_NAME: 'ms-aks-carlos'
-  AKS_RESOURCE_GROUP: 'ms-aks-carlos_group'
 
 jobs:
   production-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  
     
     steps:
       - name: Confirm Deployment
@@ -27,7 +29,9 @@ jobs:
           
       - name: Checkout code
         uses: actions/checkout@v4
-        
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -38,10 +42,6 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
           
-      - name: Get AKS credentials
-        run: |
-          az aks get-credentials --resource-group ${{ env.AKS_RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }}
-          
       - name: Login to ACR
         run: |
           az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
@@ -50,35 +50,65 @@ jobs:
         run: |
           echo "Building images with latest tag"
           ACR_URL="${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io"
+          TAG="prod-$(date +%Y%m%d-%H%M%S)"  
+          
+          echo "Using production tag: $TAG"
    
           echo "Building Cart service..."
           dotnet publish src/Cart/Cart.WebAPI/Cart.WebAPI.csproj -c Release -o src/Cart/Cart.WebAPI/publish
-          docker build -t $ACR_URL/microservicio-cart:latest -f src/Cart/Cart.WebAPI/Dockerfile .
-          docker push $ACR_URL/microservicio-cart:latest
+          docker build -t $ACR_URL/microservicio-cart:$TAG -f src/Cart/Cart.WebAPI/Dockerfile .
+          docker push $ACR_URL/microservicio-cart:$TAG
           
           echo "Building Catalog service..."
           dotnet publish src/Catalog/Catalog.WebApi/Catalog.WebAPI.csproj -c Release -o src/Catalog/publish
-          docker build -t $ACR_URL/microservicio-catalog:latest -f src/Catalog/Catalog.WebApi/Dockerfile .
-          docker push $ACR_URL/microservicio-catalog:latest
+          docker build -t $ACR_URL/microservicio-catalog:$TAG -f src/Catalog/Catalog.WebApi/Dockerfile .
+          docker push $ACR_URL/microservicio-catalog:$TAG
           
           echo "Building User service..."
           dotnet publish src/User/User.WebAPI/User.WebAPI.csproj -c Release -o src/User/publish
-          docker build -t $ACR_URL/microservicio-usuario:latest -f src/User/User.WebAPI/Dockerfile .
-          docker push $ACR_URL/microservicio-usuario:latest
+          docker build -t $ACR_URL/microservicio-usuario:$TAG -f src/User/User.WebAPI/Dockerfile .
+          docker push $ACR_URL/microservicio-usuario:$TAG
           
-          echo "All images built and pushed to ACR with latest tag!"
+          echo "All images built and pushed to ACR with tag: $TAG"
           
-      - name: Deploy to Production AKS
+       
+          echo "PROD_TAG=$TAG" >> $GITHUB_ENV
+          
+      - name: Update Production Manifests (GitOps)
         run: |
-          echo "Deploying to production AKS cluster..."
-          kubectl apply -k k8s/overlays/production/
-          echo "Production deployment completed!"
+          echo "Updating production manifests with new tag: $PROD_TAG"
           
-      - name: Verify Deployment
+    
+          sed -i "s|newTag: .*|newTag: $PROD_TAG|g" k8s/overlays/production/kustomization.yaml
+          
+          echo "Updated kustomization.yaml content:"
+          cat k8s/overlays/production/kustomization.yaml
+          
+      - name: Commit and Push Changes (GitOps)
         run: |
-          echo "Verifying deployment..."
-          kubectl get pods -n prod
-          kubectl wait --for=condition=ready pod -l app=cart-service -n prod --timeout=300s
-          kubectl wait --for=condition=ready pod -l app=catalog-service -n prod --timeout=300s  
-          kubectl wait --for=condition=ready pod -l app=user-service -n prod --timeout=300s
-          echo "Deployment verification completed!"
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action - Production Deploy"
+          
+          git add k8s/overlays/production/kustomization.yaml
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Production deploy: Update images to $PROD_TAG"
+            git push origin main
+            echo " Changes pushed to Git - ArgoCD will handle deployment!"
+          fi
+          
+      - name: Deployment Summary
+        run: |
+          echo " Production deployment process completed!"
+          echo ""
+          echo " Summary:"
+          echo "  • Images built and pushed to ACR with tag: $PROD_TAG"
+          echo "  • Production manifests updated in Git"
+          echo "  • ArgoCD will automatically sync changes to AKS cluster"
+          echo ""
+          echo " Next steps:"
+          echo "  • Monitor ArgoCD UI for deployment progress"
+          echo "  • Check AKS cluster: kubectl get pods -n prod"
+          echo "  • ArgoCD sync typically takes 1-3 minutes"

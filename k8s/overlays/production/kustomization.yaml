@@ -13,10 +13,13 @@ namespace: prod
 images:
  - name: carlosms18/microservicio-usuario:latest
    newName: microservicioscarlos.azurecr.io/microservicio-usuario
+   newTag: latest
  - name: carlosms18/microservicio-catalog:latest
    newName: microservicioscarlos.azurecr.io/microservicio-catalog
+   newTag: latest
  - name: carlosms18/microservicio-cart:latest
    newName: microservicioscarlos.azurecr.io/microservicio-cart
+   newTag: latest
 patches:
  - path: apps/patches/environment.yaml
    target:
