@@ -100,11 +100,16 @@ jobs:
             git commit -m "Production deploy: Update images to $PROD_TAG"
             git push origin $BRANCH_NAME
             
-            gh pr create \
-              --title "Production Deploy: $PROD_TAG" \
-              --body 'Auto-generated Production Deployment' \
-              --base main \
-              --head $BRANCH_NAME
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/${{ github.repository }}/pulls \
+              -d "{
+                \"title\": \"Production Deploy: $PROD_TAG\",
+                \"body\": \"Auto-generated Production Deployment\\n\\nDeployment Tag: $PROD_TAG\\nSource Commit: ${{ github.sha }}\\nTriggered by: ${{ github.actor }}\\n\\nImages updated to production tag: $PROD_TAG\",
+                \"head\": \"$BRANCH_NAME\",
+                \"base\": \"main\"
+              }"
               
             echo "Pull Request created successfully!"
             echo "Check GitHub to review, approve and merge the PR"
