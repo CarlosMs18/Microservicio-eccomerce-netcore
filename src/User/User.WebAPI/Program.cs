@@ -21,7 +21,7 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("👤 Iniciando User Service!!!!!!");
+    Log.Information("👤 Iniciando User Service!!!!!!!!!!!");
 
     var builder = WebApplication.CreateBuilder(args);
 
