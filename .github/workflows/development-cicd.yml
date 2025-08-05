@@ -134,7 +134,13 @@ jobs:
             echo "Changes detected, committing and pushing..."
             git add k8s/overlays/development/kustomization.yaml
             git commit -m "chore: update development kustomization with image tag $TAG [skip ci]"
-            git push origin HEAD:main --force-with-lease
+            
+            
+            if ! git push origin HEAD:main --force-with-lease; then
+              echo "Force-with-lease failed, using force push..."
+              git push origin HEAD:main --force
+            fi
+            
             echo "Kustomization updated and pushed to repository with tag: $TAG"
           fi
           
