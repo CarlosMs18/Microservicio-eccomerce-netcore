@@ -121,28 +121,7 @@ jobs:
           echo "Updated kustomization.yaml content:"
           cat k8s/overlays/development/kustomization.yaml
 
-      - name: Commit and Push Updated Kustomization
-        run: |
-          TAG=${GITHUB_SHA:0:7}
-          
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          if git diff --quiet k8s/overlays/development/kustomization.yaml; then
-            echo "No changes detected in kustomization.yaml"
-          else
-            echo "Changes detected, committing and pushing..."
-            git add k8s/overlays/development/kustomization.yaml
-            git commit -m "chore: update development kustomization with image tag $TAG [skip ci]"
-            
-            
-            if ! git push origin HEAD:main --force-with-lease; then
-              echo "Force-with-lease failed, using force push..."
-              git push origin HEAD:main --force
-            fi
-            
-            echo "Kustomization updated and pushed to repository with tag: $TAG"
-          fi
+
           
       - name: Create Kind cluster
         uses: helm/kind-action@v1.10.0
