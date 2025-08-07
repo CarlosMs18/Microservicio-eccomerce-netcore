@@ -1,7 +1,7 @@
  
 - op: add
   path: /spec/rules/0/host
-  value: 128.203.215.1.nip.io
+  value: 128.203.215.1.sslip.io
 - op: add
   path: /metadata/annotations/cert-manager.io~1cluster-issuer
   value: letsencrypt-prod
@@ -12,5 +12,5 @@
   path: /spec/tls
   value:
   - hosts:
-    - 128.203.215.1.nip.io
+    - 128.203.215.1.sslip.io
     secretName: ecommerce-public-tls-cert

@@ -4,7 +4,6 @@ on:
   push:
     branches: 
       - main
-      - implementacion-cert-ssl
       - '!production-deploy-*'
   pull_request:
     branches: [ main ]
