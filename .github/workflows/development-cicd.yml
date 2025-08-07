@@ -50,6 +50,8 @@ jobs:
         
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
         
       - name: Validate Development Manifests
         run: |
@@ -217,6 +219,8 @@ jobs:
           
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
+        with:
+         version: 'v1.28.0' 
         
       - name: Install Calico CNI (for Network Policies)
         run: |
