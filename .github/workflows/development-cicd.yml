@@ -82,7 +82,7 @@ jobs:
           
       - name: Security Validation
         run: |
-          echo "Basic security validation..."
+          echo "Basic security validation!..."
           
           echo "Checking for privileged containers..."
           if grep -r "privileged: true" k8s/; then
