@@ -13,4 +13,4 @@
   value:
   - hosts:
     - 128.203.215.1.sslip.io
-    secretName: ecommerce-public-tls-cert
+    secretName: ecommerce-tls-v2
