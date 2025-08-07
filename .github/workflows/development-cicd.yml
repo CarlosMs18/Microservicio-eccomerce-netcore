@@ -47,7 +47,7 @@ jobs:
   validate-manifests:
     needs: detect-changes
     runs-on: ubuntu-latest
-    if: needs.detect-changes.outputs.manifests == 'true'
+    if: needs.detect-changes.outputs.manifests == 'true' && !startsWith(github.ref, 'refs/heads/production-deploy-')
     
     steps:
       - name: Checkout code
@@ -111,7 +111,7 @@ jobs:
   ci-tests:
     needs: detect-changes
     runs-on: ubuntu-latest
-    if: needs.detect-changes.outputs.source-code == 'true' && (needs.detect-changes.outputs.cart == 'true' || needs.detect-changes.outputs.catalog == 'true' || needs.detect-changes.outputs.user == 'true')
+    if: needs.detect-changes.outputs.source-code == 'true' && (needs.detect-changes.outputs.cart == 'true' || needs.detect-changes.outputs.catalog == 'true' || needs.detect-changes.outputs.user == 'true') && !startsWith(github.ref, 'refs/heads/production-deploy-')
     
     strategy:
       matrix:
@@ -148,7 +148,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: always() && (needs.ci-tests.result == 'success' || needs.ci-tests.result == 'skipped') && (needs.validate-manifests.result == 'success' || needs.validate-manifests.result == 'skipped') && (needs.detect-changes.outputs.cart == 'true' || needs.detect-changes.outputs.catalog == 'true' || needs.detect-changes.outputs.user == 'true')
+    if: always() && (needs.ci-tests.result == 'success' || needs.ci-tests.result == 'skipped') && (needs.validate-manifests.result == 'success' || needs.validate-manifests.result == 'skipped') && (needs.detect-changes.outputs.cart == 'true' || needs.detect-changes.outputs.catalog == 'true' || needs.detect-changes.outputs.user == 'true') && !startsWith(github.ref, 'refs/heads/production-deploy-')
     
     steps:
       - name: Checkout code
