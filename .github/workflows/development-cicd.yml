@@ -54,13 +54,13 @@ jobs:
       - name: Validate Development Manifests
         run: |
           echo "Validating development manifests..."
-          kubectl kustomize k8s/overlays/development/ --dry-run=client > /dev/null
+          kubectl apply --dry-run=client -k k8s/overlays/development/ > /dev/null
           echo "Development manifests are valid!"
           
       - name: Validate Production Manifests
         run: |
           echo "Validating production manifests..."
-          kubectl kustomize k8s/overlays/production/ --dry-run=client > /dev/null
+          kubectl apply --dry-run=client -k k8s/overlays/production/ > /dev/null
           echo "Production manifests are valid!"
           
       - name: Validate Base Manifests
@@ -269,8 +269,8 @@ jobs:
       - name: Validate Manifests Before Deploy
         run: |
           echo "Final validation before deployment..."
-          kubectl kustomize k8s/overlays/development/ --dry-run=client > /dev/null
-          kubectl kustomize k8s/overlays/development/monitoring/ --dry-run=client > /dev/null
+          kubectl apply --dry-run=client -k k8s/overlays/development/ > /dev/null
+          kubectl apply --dry-run=client -k k8s/overlays/development/monitoring/ > /dev/null
           echo "All manifests validated successfully!"
           
       - name: Debug Kustomization Files
