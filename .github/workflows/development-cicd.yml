@@ -3,12 +3,17 @@ name: Development CI/CD
 on:
   push:
     branches: [ main, implementacion-cert-ssl ]
+    paths-ignore:
+      - 'k8s/overlays/production/**'
+      - '*.md'
+      - 'docs/**'
   pull_request:
     branches: [ main ]
 
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
+    if: "!startsWith(github.ref, 'refs/heads/production-deploy-')"
     outputs:
       cart: ${{ steps.changes.outputs.cart }}
       catalog: ${{ steps.changes.outputs.catalog }}
@@ -56,19 +61,19 @@ jobs:
       - name: Validate Development Manifests
         run: |
           echo "Validating development manifests..."
-          kubectl apply --dry-run=client -k k8s/overlays/development/ > /dev/null
+          kubectl apply --dry-run=client -k k8s/overlays/development/ --validate=true
           echo "Development manifests are valid!"
           
-      - name: Validate Production Manifests
+      - name: Validate Production Manifests  
         run: |
           echo "Validating production manifests..."
-          kubectl apply --dry-run=client -k k8s/overlays/production/ > /dev/null
+          kubectl apply --dry-run=client -k k8s/overlays/production/ --validate=true
           echo "Production manifests are valid!"
           
       - name: Validate Base Manifests
         run: |
           echo "Validating base manifests..."
-          find k8s/base -name "*.yaml" -exec kubectl apply --dry-run=client -f {} \; > /dev/null
+          find k8s/base -name "*.yaml" -exec kubectl apply --dry-run=client --validate=true -f {} \;
           echo "Base manifests are valid!"
           
       - name: Check Resource Limits
@@ -82,11 +87,11 @@ jobs:
           
       - name: Security Validation
         run: |
-          echo "Basic security validation!..."
+          echo "Security validation..."
           
           echo "Checking for privileged containers..."
           if grep -r "privileged: true" k8s/; then
-            echo "WARNING: Privileged containers found!"
+            echo "ERROR: Privileged containers found!"
             exit 1
           fi
           
@@ -97,7 +102,7 @@ jobs:
           
           echo "Checking for hostNetwork usage..."
           if grep -r "hostNetwork: true" k8s/; then
-            echo "WARNING: hostNetwork usage found!"
+            echo "ERROR: hostNetwork usage found!"
             exit 1
           fi
           
