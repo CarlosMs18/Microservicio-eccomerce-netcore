@@ -89,7 +89,7 @@ jobs:
         run: |
           echo "Security validation..."
           
-          echo "Checking for privileged containers..."
+          echo "Checking for privileged containers!..."
           if grep -r "privileged: true" k8s/; then
             echo "ERROR: Privileged containers found!"
             exit 1
