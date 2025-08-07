@@ -2,7 +2,7 @@ name: Development CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, implementacion-cert-ssl ]
   pull_request:
     branches: [ main ]
 
@@ -82,7 +82,7 @@ jobs:
           
       - name: Security Validation
         run: |
-          echo "Basic security validation..."
+          echo "Basic security validation!..."
           
           echo "Checking for privileged containers..."
           if grep -r "privileged: true" k8s/; then
